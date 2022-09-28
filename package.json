@@ -1,23 +1,25 @@
 {
     "name": "govee-lan-control",
-    "version": "1.0.0",
+    "displayName": "Govee LAN Control",
+    "version": "1.1.0",
     "description": "A package to control Govee devices using their new LAN control.",
     "scripts": {
         "prepublish": "npm run build",
-        "build": "rm -fr dist/* && tsup src/index.ts --format cjs,esm --dts --clean",
+        "build": "rm -fr dist/* && tsup src/index.ts --format cjs,esm --dts --dts-resolve",
         "watch": "npm run build -- --watch src",
         "prepublishOnly": "npm run build"
     },
     "main": "./dist/index.js",
     "module": "./dist/index.mjs",
+    "require": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {
-      ".": {
-        "require": "./dist/index.js",
-        "import": "./dist/index.mjs",
-        "types": "./dist/index.d.ts"      
-      }
-    },  
+        ".": {
+            "require": "./dist/index.js",
+            "import": "./dist/index.mjs",
+            "types": "./dist/index.d.ts"
+        }
+    },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/Joery-M/Govee-LAN-Control.git"
@@ -32,7 +34,8 @@
     },
     "homepage": "https://github.com/Joery-M/Govee-LAN-Control#readme",
     "dependencies": {
-        "color-convert": "^2.0.1"
+        "color-convert": "^2.0.1",
+        "color-temperature": "^0.2.7"
     },
     "devDependencies": {
         "@types/color-convert": "^2.0.0",

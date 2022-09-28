@@ -1,9 +1,9 @@
-import { createSocket, RemoteInfo, Socket } from 'dgram';
-import { networkInterfaces } from 'os';
-import { fade, setBrightness, setColor, setColorTemp } from './commands/setColors';
+import { RemoteInfo, Socket } from 'dgram';
+import { fade, setBrightness, setColor } from './commands/setColors';
 import { setOff, setOn } from './commands/setOnOff';
 import getSocket from './commands/createSocket';
 import { EventEmitter } from 'events';
+import * as ct from 'color-temperature';
 
 export class Device
 {
@@ -54,12 +54,35 @@ export interface fadeOptions
     brightness?: number;
 }
 
-export interface colorOptions
+interface colorOptionsHex
 {
-    hex?: string;
-    rgb?: [number, number, number];
-    hsl?: [number, number, number];
+    hex: string;
+    rgb?: never;
+    hsl?: never;
+    kelvin?: never;
 }
+interface colorOptionsRGB
+{
+    hex?: never;
+    rgb: [number, number, number];
+    hsl?: never;
+    kelvin?: never;
+}
+interface colorOptionsHSL
+{
+    hex?: never;
+    rgb?: never;
+    hsl: [number, number, number];
+    kelvin?: never;
+}
+interface colorOptionsKelvin
+{
+    hex?: never;
+    rgb?: never;
+    hsl?: never;
+    kelvin: string | number;
+}
+export type colorOptions = colorOptionsHex | colorOptionsRGB | colorOptionsHSL | colorOptionsKelvin;
 
 class actions
 {
@@ -67,9 +90,8 @@ class actions
     {
         this.device = device;
     }
-    private device;
+    private device: Device;
     setRGB = (color: colorOptions): Promise<void> => { return setColor.call(this.device, color); };
-    setColorTemp = (color: string): Promise<void> => { return setColorTemp.call(this.device, color); };
     setBrightness = (brightness: string | number): Promise<void> => { return setBrightness.call(this.device, brightness); };
     fadeColor = (options: fadeOptions): Promise<void> => { return fade.call(this.device, eventEmitter, options); };
     setOff = (): Promise<void> => { return setOff.call(this.device); };
@@ -138,7 +160,13 @@ class Govee extends EventEmitter
                 device.state.brightness = data.brightness;
                 device.state.isOn = data.onOff;
                 device.state.color = data.color;
-                device.state.colorKelvin = data.colorTemInKelvin;
+
+                if (!data.color.colorTemInKelvin) {
+                    device.state.colorKelvin = ct.rgb2colorTemperature({red: data.color.r, green: data.color.g, blue: data.color.b})
+                }else{
+                    device.state.colorKelvin = data.color.colorTemInKelvin
+                }
+                
                 eventEmitter.emit("newStatus", device, data);
                 break;
 

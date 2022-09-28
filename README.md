@@ -22,9 +22,9 @@ they have a list.
 const Govee = require("govee-lan-control");
 
 var govee = new Govee.default();
-govee.on("ready", ()=>{
-    console.log("Server/client is ready!");
-})
+govee.on("ready", () => {
+	console.log("Server/client is ready!");
+});
 govee.on("deviceAdded", (device) => {
 	console.log("New Device!", device.model);
 });
@@ -44,10 +44,10 @@ setInterval(() => {
 }, 2000);
 ```
 
-### Rainbow (Requires color-rainbow)
+### Rainbow (Requires [color-rainbow](https://www.npmjs.com/package/color-rainbow) for this example)
 
 ```js
-const rainbow = require("color-rainbow")
+const rainbow = require("color-rainbow");
 
 var numColors = 50;
 var rainbowColors = rainbow.create(numColors);
@@ -69,13 +69,33 @@ while (true) {
 }
 ```
 
+## Events
+
+| Event         | Description                                                            |
+| ------------- | ---------------------------------------------------------------------- |
+| `ready`       | Gets run when the server/client is ready                               |
+| `deviceAdded` | Gets run when a device is found.<br>(For now this includes duplicates) |
+| `newStatus`   | Gets run when a device updates its color status                        |
+
 ## Possible light commands
 
-| Command                  | Usage                                      |
-|--------------------------|--------------------------------------------|
-| Turn on                  | `Device.actions.turnOn();`                 |
-| Turn off                 | `Device.actions.turnOff();`                |
-| Set Color                | `Device.actions.setColor(color);`          |
-| Set Color temperature    | `Device.actions.setColorTemp(kelvin);`     |
-| Set Brightness           | `Device.actions.setBrightness(brightness);`|
-| Fade to brightness/color | `Device.actions.fadeColor(fadeOptions);`   |
+| Command                  | Usage                                       |
+| ------------------------ | ------------------------------------------- |
+| Turn on                  | `Device.actions.turnOn();`                  |
+| Turn off                 | `Device.actions.turnOff();`                 |
+| Set Color                | `Device.actions.setColor(color);`           |
+| Set Brightness           | `Device.actions.setBrightness(brightness);` |
+| Fade to brightness/color | `Device.actions.fadeColor(fadeOptions);`    |
+
+## Options for color parameter
+
+(I suck at Typescript, so just use one at a time.)
+
+```ts
+{
+    hex: string,
+    rgb: [number, number, number],
+    hsl: [number, number, number],
+    kelvin: string | number
+}
+```

@@ -1,6 +1,8 @@
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -14,6 +16,10 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // src/index.ts
@@ -26,55 +32,66 @@ module.exports = __toCommonJS(src_exports);
 
 // src/commands/setColors.ts
 var import_color_convert = require("color-convert");
+var ct = __toESM(require("color-temperature"));
 var lerp = (x, y, a) => x * (1 - a) + y * a;
 function lerpColor(a, b, amount) {
   var ah = parseInt(a.replace(/#/g, ""), 16), ar = ah >> 16, ag = ah >> 8 & 255, ab = ah & 255, bh = parseInt(b.replace(/#/g, ""), 16), br = bh >> 16, bg = bh >> 8 & 255, bb = bh & 255, rr = ar + amount * (br - ar), rg = ag + amount * (bg - ag), rb = ab + amount * (bb - ab);
   return "#" + ((1 << 24) + (rr << 16) + (rg << 8) + rb | 0).toString(16).slice(1);
 }
-function setColor(colorOption) {
+function setColor(options) {
   return new Promise((resolve, reject) => {
     var _a;
     var rgb2 = { r: 0, g: 0, b: 0 };
-    if (colorOption.hex) {
-      var newColor = import_color_convert.hex.rgb(colorOption.hex);
-      rgb2 = {
-        r: newColor[0],
-        g: newColor[1],
-        b: newColor[2]
-      };
-    } else if (colorOption.hsl) {
-      var newColor = import_color_convert.hsl.rgb(colorOption.hsl);
-      rgb2 = {
-        r: newColor[0],
-        g: newColor[1],
-        b: newColor[2]
-      };
-    } else if (colorOption.rgb) {
-      rgb2 = {
-        r: colorOption.rgb[0],
-        g: colorOption.rgb[1],
-        b: colorOption.rgb[2]
-      };
-    }
-    let message = JSON.stringify(
-      {
-        msg: {
-          cmd: "colorwc",
-          data: {
-            colorTemInKelvin: 0,
-            color: rgb2
+    var message;
+    if (options.kelvin) {
+      var kelvin = parseFloat(options.kelvin.toString().replace(/[^0-9]/g, ""));
+      message = JSON.stringify(
+        {
+          msg: {
+            cmd: "colorwc",
+            data: {
+              colorTemInKelvin: kelvin
+            }
           }
         }
+      );
+    } else {
+      if (options.hex) {
+        var newColor = import_color_convert.hex.rgb(options.hex);
+        rgb2 = {
+          r: newColor[0],
+          g: newColor[1],
+          b: newColor[2]
+        };
+      } else if (options.hsl) {
+        var newColor = import_color_convert.hsl.rgb(options.hsl);
+        rgb2 = {
+          r: newColor[0],
+          g: newColor[1],
+          b: newColor[2]
+        };
+      } else if (options.rgb) {
+        rgb2 = {
+          r: options.rgb[0],
+          g: options.rgb[1],
+          b: options.rgb[2]
+        };
       }
-    );
+      message = JSON.stringify(
+        {
+          msg: {
+            cmd: "colorwc",
+            data: {
+              color: rgb2
+            }
+          }
+        }
+      );
+    }
     (_a = this.socket) == null ? void 0 : _a.send(message, 0, message.length, 4001, this.ip, () => {
       updateValues(this);
       resolve();
     });
-  });
-}
-function setColorTemp(color) {
-  return new Promise((resolve, reject) => {
   });
 }
 function setBrightness(brightness) {
@@ -103,8 +120,8 @@ function fade(eventEmitter2, options) {
     eventEmitter2.once("newStatus", async (device, data) => {
       if (device.deviceID !== this.deviceID)
         return;
-      var curBrightness = device.state.brightness;
       var curHex = import_color_convert.rgb.hex(device.state.color.r, device.state.color.g, device.state.color.b);
+      var curKelvin = device.state.colorKelvin = ct.rgb2colorTemperature({ red: device.state.color.r, green: device.state.color.g, blue: device.state.color.b });
       if (options.color.hex || options.color.hsl || options.color.rgb) {
         var newColor = "";
         if (options.color.hsl)
@@ -120,9 +137,10 @@ function fade(eventEmitter2, options) {
           setColor.call(this, {
             hex: newColor
           });
+          resolve();
         }, options.time - 100);
         while (running == true) {
-          var percent = (Date.now() - startTime) / options.time;
+          var percent = (Date.now() - startTime) / (options.time - 100);
           var lerpedColor = lerpColor(curHex, newColor, Math.max(Math.min(percent, 1), 0));
           var newRgb = import_color_convert.hex.rgb(lerpedColor);
           device.state.color.r = newRgb[0];
@@ -131,17 +149,45 @@ function fade(eventEmitter2, options) {
           await setColor.call(this, {
             hex: "#" + lerpedColor
           });
-          await sleep(50);
+          await sleep(10);
+        }
+      } else if (options.color.kelvin) {
+        var targetKelvin = parseFloat(options.color.kelvin.toString().replace(/[^0-9]/g, ""));
+        var running = true;
+        var startTime = Date.now();
+        setTimeout(() => {
+          running = false;
+          var kelvinRGB2 = ct.colorTemperature2rgb(targetKelvin);
+          setColor.call(this, {
+            rgb: [kelvinRGB2.red, kelvinRGB2.green, kelvinRGB2.blue]
+          });
+          device.state.color.r = kelvinRGB2.red;
+          device.state.color.g = kelvinRGB2.green;
+          device.state.color.b = kelvinRGB2.blue;
+          device.state.colorKelvin = targetKelvin;
+          resolve();
+        }, options.time - 100);
+        while (running == true) {
+          var percent = (Date.now() - startTime) / (options.time - 100);
+          var lerpedKelvin = lerp(curKelvin, targetKelvin, Math.max(Math.min(percent, 1), 0));
+          console.log(percent, lerpedKelvin, curKelvin, targetKelvin);
+          var kelvinRGB = ct.colorTemperature2rgb(lerpedKelvin);
+          device.state.color.r = kelvinRGB.red;
+          device.state.color.g = kelvinRGB.green;
+          device.state.color.b = kelvinRGB.blue;
+          device.state.colorKelvin = targetKelvin;
+          await setColor.call(this, {
+            rgb: [kelvinRGB.red, kelvinRGB.green, kelvinRGB.blue]
+          });
+          await sleep(10);
         }
       }
-      resolve();
       updateValues(this);
     });
     eventEmitter2.once("newStatus", async (device, data) => {
       if (device.deviceID !== this.deviceID)
         return;
       var curBrightness = device.state.brightness;
-      var curHex = import_color_convert.rgb.hex(device.state.color.r, device.state.color.g, device.state.color.b);
       if (options.brightness) {
         var running = true;
         var startTime = Date.now();
@@ -149,13 +195,14 @@ function fade(eventEmitter2, options) {
         setTimeout(() => {
           running = false;
           setBrightness.call(this, targetBright);
+          resolve();
         }, options.time - 100);
         while (running == true) {
-          var percent = (Date.now() - startTime) / options.time;
+          var percent = (Date.now() - startTime) / (options.time - 100);
           var newBright = lerp(curBrightness, options.brightness, Math.max(Math.min(percent, 1), 0));
           device.state.brightness = newBright;
           await setBrightness.call(this, newBright);
-          await sleep(50);
+          await sleep(10);
         }
       }
       resolve();
@@ -270,6 +317,7 @@ var createSocket_default = () => {
 
 // src/index.ts
 var import_events = require("events");
+var ct2 = __toESM(require("color-temperature"));
 var Device = class {
   constructor(data, GoveeInstance, socket2) {
     this.actions = new actions(this);
@@ -295,9 +343,6 @@ var actions = class {
   constructor(device) {
     this.setRGB = (color) => {
       return setColor.call(this.device, color);
-    };
-    this.setColorTemp = (color) => {
-      return setColorTemp.call(this.device, color);
     };
     this.setBrightness = (brightness) => {
       return setBrightness.call(this.device, brightness);
@@ -352,7 +397,11 @@ var Govee = class extends import_events.EventEmitter {
         device.state.brightness = data.brightness;
         device.state.isOn = data.onOff;
         device.state.color = data.color;
-        device.state.colorKelvin = data.colorTemInKelvin;
+        if (!data.color.colorTemInKelvin) {
+          device.state.colorKelvin = ct2.rgb2colorTemperature({ red: data.color.r, green: data.color.g, blue: data.color.b });
+        } else {
+          device.state.colorKelvin = data.color.colorTemInKelvin;
+        }
         eventEmitter.emit("newStatus", device, data);
         break;
       default:

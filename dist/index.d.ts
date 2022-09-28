@@ -26,16 +26,35 @@ interface fadeOptions {
     color: colorOptions;
     brightness?: number;
 }
-interface colorOptions {
-    hex?: string;
-    rgb?: [number, number, number];
-    hsl?: [number, number, number];
+interface colorOptionsHex {
+    hex: string;
+    rgb?: never;
+    hsl?: never;
+    kelvin?: never;
 }
+interface colorOptionsRGB {
+    hex?: never;
+    rgb: [number, number, number];
+    hsl?: never;
+    kelvin?: never;
+}
+interface colorOptionsHSL {
+    hex?: never;
+    rgb?: never;
+    hsl: [number, number, number];
+    kelvin?: never;
+}
+interface colorOptionsKelvin {
+    hex?: never;
+    rgb?: never;
+    hsl?: never;
+    kelvin: string | number;
+}
+declare type colorOptions = colorOptionsHex | colorOptionsRGB | colorOptionsHSL | colorOptionsKelvin;
 declare class actions {
     constructor(device: Device);
     private device;
     setRGB: (color: colorOptions) => Promise<void>;
-    setColorTemp: (color: string) => Promise<void>;
     setBrightness: (brightness: string | number) => Promise<void>;
     fadeColor: (options: fadeOptions) => Promise<void>;
     setOff: () => Promise<void>;
