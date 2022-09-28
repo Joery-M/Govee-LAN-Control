@@ -1,3 +1,4 @@
+[![govee-lan-control Tutorials](https://badges.openbase.com/js/tutorials/govee-lan-control.svg?token=WeSxq+TIhdrbzTUdHsj8tTiKu+Hg9ftl3chY6jVgGWM=)](https://openbase.com/js/govee-lan-control?utm_source=embedded&amp;utm_medium=badge&amp;utm_campaign=rate-badge)
 # Govee LAN API
 
 Someone will probably make this better than I ever could, but I wan't to abandon
