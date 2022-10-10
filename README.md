@@ -1,4 +1,3 @@
-[![Rate this package](https://badges.openbase.com/js/rating/govee-lan-control.svg?token=fYl+iGp65nC7nVyTaYQxkSniQfubn9Jpd/lIgf8En40=)](https://openbase.com/js/govee-lan-control?utm_source=embedded&utm_medium=badge&utm_campaign=rating-badge&utm_term=js/govee-lan-control)
 # Govee LAN API
 
 Someone will probably make this better than I ever could, but I wan't to abandon
