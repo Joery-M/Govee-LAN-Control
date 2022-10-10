@@ -1,5 +1,4 @@
-import { EventEmitter } from "stream";
-import { colorOptions, DataResponseStatus, Device, fadeOptions } from "..";
+import Govee, { colorOptions, DataResponseStatus, Device, fadeOptions, udpSocket } from "..";
 import { hex, hsl, rgb } from "color-convert";
 import * as ct from 'color-temperature';
 
@@ -30,8 +29,59 @@ function lerpColor (a: string, b: string, amount: number)
     return '#' + ((1 << 24) + (rr << 16) + (rg << 8) + rb | 0).toString(16).slice(1);
 }
 
+/**
+ * Returns a bezier interpolated value, using the given ranges
+ * @param {number} value  Value to be interpolated
+ * @param {number} s1 Source range start
+ * @param {number} s2  Source range end
+ * @param {number} t1  Target range start
+ * @param {number} t2  Target range end
+ * @param {number} [slope]  Weight of the curve (0.5 = linear, 0.1 = weighted near target start, 0.9 = weighted near target end)
+ * @returns {number} Interpolated value
+ */
+var interpolate = function (value: number, s1: number, s2: number, t1: any, t2: any, slope: number)
+{
+    //Default to linear interpolation
+    slope = slope || 0.5;
+
+    //If the value is out of the source range, floor to min/max target values
+    if (value < Math.min(s1, s2))
+    {
+        return Math.min(s1, s2) === s1 ? t1 : t2;
+    }
+
+    if (value > Math.max(s1, s2))
+    {
+        return Math.max(s1, s2) === s1 ? t1 : t2;
+    }
+
+    //Reverse the value, to make it correspond to the target range (this is a side-effect of the bezier calculation)
+    value = s2 - value;
+
+    var C1 = { x: s1, y: t1 }; //Start of bezier curve
+    var C3 = { x: s2, y: t2 }; //End of bezier curve
+    var C2 = {              //Control point
+        x: C3.x,
+        y: C1.y + Math.abs(slope) * (C3.y - C1.y)
+    };
+
+    //Find out how far the value is on the curve
+    var percent = value / (C3.x - C1.x);
+
+    return C1.y * b1(percent) + C2.y * b2(percent) + C3.y * b3(percent);
+
+    function b1 (t: number) { return t * t; }
+    function b2 (t: number) { return 2 * t * (1 - t); }
+    function b3 (t: number) { return (1 - t) * (1 - t); }
+};
+
+/**
+ * @description
+ * Set the color of a light.
+ */
 export function setColor (this: Device, options: colorOptions): Promise<void>
 {
+    var device = this;
     return new Promise((resolve, reject) =>
     {
         var rgb = { r: 0, g: 0, b: 0 };
@@ -53,7 +103,7 @@ export function setColor (this: Device, options: colorOptions): Promise<void>
             );
         } else
         {
-            if (options.hex)
+            if (options.hex !== undefined)
             {
                 var newColor = hex.rgb(options.hex);
                 rgb = {
@@ -61,7 +111,7 @@ export function setColor (this: Device, options: colorOptions): Promise<void>
                     g: newColor[1],
                     b: newColor[2]
                 };
-            } else if (options.hsl)
+            } else if (options.hsl !== undefined)
             {
                 var newColor = hsl.rgb(options.hsl);
                 rgb = {
@@ -69,7 +119,7 @@ export function setColor (this: Device, options: colorOptions): Promise<void>
                     g: newColor[1],
                     b: newColor[2]
                 };
-            } else if (options.rgb)
+            } else if (options.rgb !== undefined)
             {
                 rgb = {
                     r: options.rgb[0],
@@ -90,11 +140,24 @@ export function setColor (this: Device, options: colorOptions): Promise<void>
             );
         }
 
-        this.socket?.send(message, 0, message.length, 4001, this.ip, () =>
-        {
-            updateValues(this);
-            resolve();
-        });
+        //! Commands have to be send twice te be caught by devstatus... annoying
+        // device.socket?.send(message, 0, message.length, 4001, device.ip, () =>
+        // {
+            device.socket?.send(message, 0, message.length, 4001, device.ip, () =>
+            {
+                if (rgb)
+                {
+                    device.state.color = rgb;
+                    device.state.colorKelvin = ct.rgb2colorTemperature({ red: rgb.r, green: rgb.g, blue: rgb.b });
+                } else if (kelvin)
+                {
+                    var rgbColor = ct.colorTemperature2rgb(kelvin);
+                    device.state.color = { r: rgbColor.red, g: rgbColor.green, b: rgbColor.blue };
+                    device.state.colorKelvin = kelvin;
+                }
+                resolve();
+            });
+        // });
     });
 }
 
@@ -102,7 +165,7 @@ export function setBrightness (this: Device, brightness: number | string): Promi
 {
     return new Promise((resolve, reject) =>
     {
-        var bright = parseFloat(brightness.toString());
+        var bright = Math.round(parseFloat(brightness.toString()) * 100) / 100;
         let message = JSON.stringify(
             {
                 "msg": {
@@ -113,135 +176,117 @@ export function setBrightness (this: Device, brightness: number | string): Promi
                 }
             }
         );
-        this.socket?.send(message, 0, message.length, 4001, this.ip, () =>
-        {
-            updateValues(this);
-            resolve();
-        });
+        //! Commands have to be send twice te be caught by devstatus... annoying
+        // this.socket?.send(message, 0, message.length, 4001, this.ip, ()=>{
+            this.socket?.send(message, 0, message.length, 4001, this.ip, () =>
+            {
+                this.state.brightness = bright;
+                resolve();
+            });
+        // });
     });
 }
 
-export function fade (this: Device, eventEmitter: EventEmitter, options: fadeOptions): Promise<void>
+export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): Promise<void>
 {
-    return new Promise((resolve, reject) =>
+    return new Promise(async (resolve, reject) =>
     {
+        var device = this;
         //? Get current value
-        updateValues(this);
+        await updateValues(device);
+        await sleep(100);
 
-        eventEmitter.once("newStatus", async (device: Device, data: DataResponseStatus) =>
+        var curHex = rgb.hex(device.state.color.r, device.state.color.g, device.state.color.b);
+        var curKelvin = ct.rgb2colorTemperature({ red: device.state.color.r, green: device.state.color.g, blue: device.state.color.b });
+        var curBrightness = device.state.isOn == 1 ? device.state.brightness : 1;
+        var targetKelvin: number;
+        var targetBright = options.brightness;
+
+        if (options.color?.kelvin)
         {
-            if (device.deviceID !== this.deviceID) return;
-            var curHex = rgb.hex(device.state.color.r, device.state.color.g, device.state.color.b);
-            var curKelvin = device.state.colorKelvin = ct.rgb2colorTemperature({red: device.state.color.r, green: device.state.color.g, blue: device.state.color.b})
+            targetKelvin = parseFloat(options.color.kelvin.toString().replace(/[^0-9]/g, ""));
+        }
 
-            if (options.color.hex || options.color.hsl || options.color.rgb)
+        var changeColor = options.color?.hex !== undefined || options.color?.hsl !== undefined || options.color?.rgb !== undefined;
+
+        var startTime = Date.now();
+
+        var newColor = "";
+        if (options.color?.hsl !== undefined)
+            newColor = hsl.hex(options.color.hsl);
+        else if (options.color?.rgb !== undefined)
+            newColor = rgb.hex(options.color.rgb);
+        else if (options.color?.hex !== undefined)
+            newColor = options.color.hex.replace(/#/g, '');
+
+        async function stepBrightness (percent: number)
+        {
+            var newBright = lerp(curBrightness, targetBright, Math.max(Math.min(percent, 1), 0));
+            device.actions.setBrightness(newBright);
+        }
+
+        async function stepColor (percent: number, newColor: string)
+        {
+            var lerpedColor = lerpColor(curHex, newColor, Math.max(Math.min(percent, 1), 0));
+
+            device.actions.setColor({ hex: "#" + lerpedColor });
+        }
+
+        async function stepKelvin (percent: number, targetKelvin: number)
+        {
+            var lerpedKelvin = lerp(curKelvin, targetKelvin, Math.max(Math.min(percent, 1), 0));
+            var kelvinRGB = ct.colorTemperature2rgb(lerpedKelvin);
+
+            device.actions.setColor({ rgb: [kelvinRGB.red, kelvinRGB.green, kelvinRGB.blue] });
+        }
+
+        // Start loop
+        var running = true;
+        setTimeout(async () =>
+        {
+            running = false;
+            if (changeColor)
             {
-                var newColor = "";
-                if (options.color.hsl)
-                    newColor = hsl.hex(options.color.hsl);
-                else if (options.color.rgb)
-                    newColor = rgb.hex(options.color.rgb);
-                else if (options.color.hex)
-                    newColor = options.color.hex.replace(/#/g, '');
-
-                var running = true;
-                var startTime = Date.now();
-                setTimeout(() =>
-                {
-                    running = false;
-                    setColor.call(this, {
-                        hex: newColor
-                    });
-                    resolve();
-                }, options.time - 100);
-                while (running == true)
-                {
-                    var percent = (Date.now() - startTime) / (options.time - 100);
-                    var lerpedColor = lerpColor(curHex, newColor, Math.max(Math.min(percent, 1), 0));
-
-                    // Set color state
-                    var newRgb = hex.rgb(lerpedColor);
-                    device.state.color.r = newRgb[0];
-                    device.state.color.g = newRgb[1];
-                    device.state.color.b = newRgb[2];
-                    await setColor.call(this, {
-                        hex: "#" + lerpedColor
-                    });
-                    await sleep(10);
-                }
-            } else if (options.color.kelvin)
+                setColor.call(device, {
+                    hex: newColor
+                });
+            } else if (targetKelvin)
             {
-                var targetKelvin = parseFloat(options.color.kelvin.toString().replace(/[^0-9]/g, ""));
-
-                var running = true;
-                var startTime = Date.now();
-                setTimeout(() =>
-                {
-                    running = false;
-                    
-                    var kelvinRGB = ct.colorTemperature2rgb(targetKelvin)
-                    setColor.call(this, {
-                        rgb: [kelvinRGB.red, kelvinRGB.green, kelvinRGB.blue]
-                    });
-                    device.state.color.r = kelvinRGB.red;
-                    device.state.color.g = kelvinRGB.green;
-                    device.state.color.b = kelvinRGB.blue;
-                    device.state.colorKelvin = targetKelvin
-                    resolve();
-                }, options.time - 100);
-                while (running == true)
-                {
-                    var percent = (Date.now() - startTime) / (options.time - 100);
-                    var lerpedKelvin = lerp(curKelvin, targetKelvin, Math.max(Math.min(percent, 1), 0));
-                    console.log(percent, lerpedKelvin, curKelvin, targetKelvin);
-                    var kelvinRGB = ct.colorTemperature2rgb(lerpedKelvin)
-
-                    // Set color state
-                    device.state.color.r = kelvinRGB.red;
-                    device.state.color.g = kelvinRGB.green;
-                    device.state.color.b = kelvinRGB.blue;
-                    device.state.colorKelvin = targetKelvin
-
-                    await setColor.call(this, {
-                        rgb: [kelvinRGB.red, kelvinRGB.green, kelvinRGB.blue]
-                    });
-                    await sleep(10);
-                }
+                var kelvinRGB = ct.colorTemperature2rgb(targetKelvin);
+                await device.actions.setColor({ rgb: [kelvinRGB.red, kelvinRGB.green, kelvinRGB.blue] });
             }
-            updateValues(this);
-        });
-
-        eventEmitter.once("newStatus", async (device: Device, data: DataResponseStatus) =>
-        {
-            if (device.deviceID !== this.deviceID) return;
-
-            var curBrightness = device.state.brightness;
-
-            if (options.brightness)
+            if (options.brightness !== undefined)
             {
-                var running = true;
-                var startTime = Date.now();
-                var targetBright = options.brightness;
-                setTimeout(() =>
-                {
-                    running = false;
-                    setBrightness.call(this, targetBright);
-                    resolve();
-                }, options.time - 100);
-                while (running == true)
-                {
-                    var percent = (Date.now() - startTime) / (options.time - 100);
-                    var newBright = lerp(curBrightness, options.brightness, Math.max(Math.min(percent, 1), 0));
-                    device.state.brightness = newBright;
-                    await setBrightness.call(this, newBright);
-                    await sleep(10);
-                }
+                device.actions.setBrightness(targetBright);
             }
 
+            await sleep(50);
+            await device.updateValues();
             resolve();
-            updateValues(this);
-        });
+        }, options.time - 100);
+        while (running == true)
+        {
+            var startLoopTime = Date.now();
+            var percent = interpolate((Date.now() - startTime) / (options.time - 100), 0, 1, 0, 1, 0.5);
+            // Color step
+            if (changeColor)
+            {
+                stepColor(percent, newColor);
+            }
 
+            // Kelvin step
+            if (options.color.kelvin !== undefined)
+            {
+                stepKelvin(percent, targetKelvin);
+            }
+
+            // Brightness step
+            if (options.brightness !== undefined)
+            {
+                stepBrightness(percent);
+            }
+            await sleep(30 - (Date.now() - startLoopTime));
+        }
     });
 }
 
@@ -256,21 +301,26 @@ function sleep (ms: number): Promise<void>
     });
 }
 
-export function updateValues (device: Device, updateAll?: boolean)
+export function updateValues (device?: Device, updateAll?: boolean)
 {
-    let message = JSON.stringify(
-        {
-            "msg": {
-                "cmd": "devStatus",
-                "data": {}
+    return new Promise<void>((resolve, reject) =>
+    {
+        let message = JSON.stringify(
+            {
+                "msg": {
+                    "cmd": "devStatus",
+                    "data": {}
+                }
             }
+        );
+        if (!updateAll)
+        {
+            udpSocket.send(message, 0, message.length, 4001, device.ip);
+            resolve();
+        } else
+        {
+            udpSocket.send(message, 0, message.length, 4001, "239.255.255.250");
+            resolve();
         }
-    );
-    if (updateAll)
-    {
-        device.socket?.send(message, 0, message.length, 4001, device.ip);
-    } else
-    {
-        device.socket?.send(message, 0, message.length, 4001, "239.255.255.250");
-    }
+    });
 }

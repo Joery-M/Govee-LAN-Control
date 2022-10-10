@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+      "typeRoots": [
+        "./node_modules/@types/node-red/index.d.ts"
+      ],
+      "include": [
+        "./src/node-red/html/main.html"
+      ],
+    },
+    "typeAcquisition": {
+        "include": ["node_modules/@types/node-red/index.d.ts"]
+    }
+  }

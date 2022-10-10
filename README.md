@@ -1,3 +1,4 @@
+[![Rate this package](https://badges.openbase.com/js/rating/govee-lan-control.svg?token=fYl+iGp65nC7nVyTaYQxkSniQfubn9Jpd/lIgf8En40=)](https://openbase.com/js/govee-lan-control?utm_source=embedded&utm_medium=badge&utm_campaign=rating-badge&utm_term=js/govee-lan-control)
 # Govee LAN API
 
 Someone will probably make this better than I ever could, but I wan't to abandon
@@ -14,6 +15,11 @@ Check
 [Govee's WLAN Guide](<https://app-h5.govee.com/user-manual/wlan-guide#:~:text=on%20their%20smartphones.-,Supported%20Models,-(continually%20updated)%3A%20H619Z>),
 they have a list.
 
+<br>
+
+## [Documentation](https://joery.com/govee-lan-control/)
+<br>
+
 ## Examples
 
 ### Initial setup
@@ -23,10 +29,10 @@ const Govee = require("govee-lan-control");
 
 var govee = new Govee.default();
 govee.on("ready", () => {
-	console.log("Server/client is ready!");
+  console.log("Server/client is ready!");
 });
 govee.on("deviceAdded", (device) => {
-	console.log("New Device!", device.model);
+  console.log("New Device!", device.model);
 });
 ```
 
@@ -34,13 +40,13 @@ govee.on("deviceAdded", (device) => {
 
 ```js
 setInterval(() => {
-	govee.getDevicesArray()[0].actions.fadeColor({
-		time: 2000,
-		color: {
-			hex: Math.floor(Math.random() * 16777215).toString(16),
-		},
-		brightness: Math.random() * 100,
-	});
+  govee.getDevicesArray()[0].actions.fadeColor({
+    time: 2000,
+    color: {
+      hex: Math.floor(Math.random() * 16777215).toString(16),
+    },
+    brightness: Math.random() * 100,
+  });
 }, 2000);
 ```
 
@@ -53,49 +59,16 @@ var numColors = 50;
 var rainbowColors = rainbow.create(numColors);
 var i = 0;
 
-while (true) {
-	var startTime = Date.now();
-	i++;
-	i %= numColors;
+setInterval(() => {
+  i++;
+  i %= numColors;
 
-	govee.getDevicesArray()[0].actions.setRGB({
-		rgb: [
-			rainbowColors[i].red(),
-			rainbowColors[i].green(),
-			rainbowColors[i].blue(),
-		],
-	});
-	await sleep(30 - (Date.now() - startTime));
-}
-```
-
-## Events
-
-| Event         | Description                                                            |
-| ------------- | ---------------------------------------------------------------------- |
-| `ready`       | Gets run when the server/client is ready                               |
-| `deviceAdded` | Gets run when a device is found.<br>(For now this includes duplicates) |
-| `newStatus`   | Gets run when a device updates its color status                        |
-
-## Possible light commands
-
-| Command                  | Usage                                       |
-| ------------------------ | ------------------------------------------- |
-| Turn on                  | `Device.actions.turnOn();`                  |
-| Turn off                 | `Device.actions.turnOff();`                 |
-| Set Color                | `Device.actions.setColor(color);`           |
-| Set Brightness           | `Device.actions.setBrightness(brightness);` |
-| Fade to brightness/color | `Device.actions.fadeColor(fadeOptions);`    |
-
-## Options for color parameter
-
-(I suck at Typescript, so just use one at a time.)
-
-```ts
-{
-    hex: string,
-    rgb: [number, number, number],
-    hsl: [number, number, number],
-    kelvin: string | number
-}
+  govee.getDevicesArray()[0].actions.setColor({
+    rgb: [
+      rainbowColors[i].red(),
+      rainbowColors[i].green(),
+      rainbowColors[i].blue(),
+    ],
+  });
+}, 30);
 ```
