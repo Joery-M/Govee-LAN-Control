@@ -1,7 +1,7 @@
 {
     "name": "govee-lan-control",
     "displayName": "Govee LAN Control",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "description": "A package to control Govee devices using their new LAN control.",
     "scripts": {
         "prepublish": "npm run build",
@@ -38,7 +38,8 @@
         "url": "git+https://github.com/Joery-M/Govee-LAN-Control.git"
     },
     "keywords": [
-        "Govee"
+        "Govee",
+        "node-red"
     ],
     "author": "Joery M",
     "license": "ISC",
