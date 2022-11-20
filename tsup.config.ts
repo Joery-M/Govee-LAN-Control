@@ -50,6 +50,10 @@ export default defineConfig({
         cp.exec(`xcopy "${fs.realpathSync("./src/node-red/html/icons").replaceAll("\\", "/")}" "${fs.realpathSync("./dist/node-red/icons").replaceAll("\\", "/")}" /K /D /H /Y`)
         .on("message", console.log)
         .on("error", console.error)
+
+
+        // Copy the dgramTest.js
+        fs.copyFileSync("./src/dgramTest.js", "./dist/dgramTest.js")
     }
 });
 

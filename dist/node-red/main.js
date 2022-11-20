@@ -5,10 +5,6 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -21,21 +17,26 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var main_exports = {};
-__export(main_exports, {
-  govee: () => govee
-});
-module.exports = __toCommonJS(main_exports);
 var import__ = __toESM(require("../index"));
 const govee = new import__.default();
 module.exports = (RED) => {
+  RED.events.addListener("runtime-event", (evt) => {
+    if (evt.id == "runtime-state" && evt.payload && evt.payload.state == "start") {
+      console.log("A");
+      RED.nodes.eachNode((node) => {
+        var types = ["Fade Color", "Set Brightness", "Set Color", "Set Power"];
+        if (types.includes(node.type)) {
+          RED.nodes.getNode(node.id).context().global.set("govee", govee);
+        }
+      });
+    }
+  });
   function discoverNode(config) {
     RED.nodes.createNode(this, config);
     var node = this;
     node.context().global.set("govee", govee);
     govee.on("deviceAdded", (device) => {
-      console.log("Device found, ", device.model, "on:", device.ip);
+      console.log("Device found, " + device.model, "on:", device.ip);
       node.send({
         payload: {
           ip: device.ip,
@@ -50,7 +51,3 @@ module.exports = (RED) => {
   }
   RED.nodes.registerType("Device Added", discoverNode);
 };
-// Annotate the CommonJS export names for ESM import in node:
-0 && (module.exports = {
-  govee
-});

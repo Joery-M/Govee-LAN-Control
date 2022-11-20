@@ -1,7 +1,7 @@
 {
     "name": "govee-lan-control",
     "displayName": "Govee LAN Control",
-    "version": "2.0.1",
+    "version": "2.1.0",
     "description": "A package to control Govee devices using their new LAN control.",
     "scripts": {
         "prepublish": "npm run build",
@@ -54,7 +54,7 @@
     "devDependencies": {
         "@types/color-convert": "^2.0.0",
         "@types/node-red": "^1.2.1",
-        "tsup": "^6.2.3",
-        "typescript": "^4.8.3"
+        "tsup": "^6.5.0",
+        "typescript": "^4.9.3"
     }
 }

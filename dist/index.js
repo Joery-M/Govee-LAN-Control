@@ -25,9 +25,8 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var src_exports = {};
 __export(src_exports, {
-  Device: () => Device2,
-  default: () => src_default,
-  udpSocket: () => udpSocket
+  Device: () => Device,
+  default: () => src_default
 });
 module.exports = __toCommonJS(src_exports);
 
@@ -69,7 +68,6 @@ var interpolate = function(value, s1, s2, t1, t2, slope) {
 function setColor(options) {
   var device = this;
   return new Promise((resolve, reject) => {
-    var _a;
     var rgb2 = { r: 0, g: 0, b: 0 };
     var message;
     if (options.kelvin) {
@@ -117,7 +115,7 @@ function setColor(options) {
         }
       );
     }
-    (_a = device.socket) == null ? void 0 : _a.send(message, 0, message.length, 4001, device.ip, () => {
+    device.socket?.send(message, 0, message.length, 4001, device.ip, () => {
       if (rgb2) {
         device.state.color = rgb2;
         device.state.colorKelvin = ct.rgb2colorTemperature({ red: rgb2.r, green: rgb2.g, blue: rgb2.b });
@@ -132,7 +130,6 @@ function setColor(options) {
 }
 function setBrightness(brightness) {
   return new Promise((resolve, reject) => {
-    var _a;
     var bright = Math.round(parseFloat(brightness.toString()) * 100) / 100;
     let message = JSON.stringify(
       {
@@ -144,7 +141,7 @@ function setBrightness(brightness) {
         }
       }
     );
-    (_a = this.socket) == null ? void 0 : _a.send(message, 0, message.length, 4001, this.ip, () => {
+    this.socket?.send(message, 0, message.length, 4001, this.ip, () => {
       this.state.brightness = bright;
       resolve();
     });
@@ -152,7 +149,6 @@ function setBrightness(brightness) {
 }
 function fade(eventEmitter2, options) {
   return new Promise(async (resolve, reject) => {
-    var _a, _b, _c, _d, _e, _f, _g;
     var device = this;
     await updateValues(device);
     await sleep(100);
@@ -161,17 +157,17 @@ function fade(eventEmitter2, options) {
     var curBrightness = device.state.isOn == 1 ? device.state.brightness : 1;
     var targetKelvin;
     var targetBright = options.brightness;
-    if ((_a = options.color) == null ? void 0 : _a.kelvin) {
+    if (options.color?.kelvin) {
       targetKelvin = parseFloat(options.color.kelvin.toString().replace(/[^0-9]/g, ""));
     }
-    var changeColor = ((_b = options.color) == null ? void 0 : _b.hex) !== void 0 || ((_c = options.color) == null ? void 0 : _c.hsl) !== void 0 || ((_d = options.color) == null ? void 0 : _d.rgb) !== void 0;
+    var changeColor = options.color?.hex !== void 0 || options.color?.hsl !== void 0 || options.color?.rgb !== void 0;
     var startTime = Date.now();
     var newColor = "";
-    if (((_e = options.color) == null ? void 0 : _e.hsl) !== void 0)
+    if (options.color?.hsl !== void 0)
       newColor = import_color_convert.hsl.hex(options.color.hsl);
-    else if (((_f = options.color) == null ? void 0 : _f.rgb) !== void 0)
+    else if (options.color?.rgb !== void 0)
       newColor = import_color_convert.rgb.hex(options.color.rgb);
-    else if (((_g = options.color) == null ? void 0 : _g.hex) !== void 0)
+    else if (options.color?.hex !== void 0)
       newColor = options.color.hex.replace(/#/g, "");
     async function stepBrightness(percent2) {
       var newBright = lerp(curBrightness, targetBright, Math.max(Math.min(percent2, 1), 0));
@@ -210,7 +206,7 @@ function fade(eventEmitter2, options) {
       if (changeColor) {
         stepColor(percent, newColor);
       }
-      if (options.color.kelvin !== void 0) {
+      if (options.color && options.color.kelvin !== void 0) {
         stepKelvin(percent, targetKelvin);
       }
       if (options.brightness !== void 0) {
@@ -238,10 +234,10 @@ function updateValues(device, updateAll) {
       }
     );
     if (!updateAll) {
-      udpSocket.send(message, 0, message.length, 4001, device.ip);
+      device.socket.send(message, 0, message.length, 4001, device.ip);
       resolve();
     } else {
-      udpSocket.send(message, 0, message.length, 4001, "239.255.255.250");
+      device.socket.send(message, 0, message.length, 4001, "239.255.255.250");
       resolve();
     }
   });
@@ -251,7 +247,6 @@ function updateValues(device, updateAll) {
 function setOff() {
   var device = this;
   return new Promise((resolve, reject) => {
-    var _a;
     let message = JSON.stringify(
       {
         msg: {
@@ -262,7 +257,7 @@ function setOff() {
         }
       }
     );
-    (_a = device.socket) == null ? void 0 : _a.send(message, 0, message.length, 4001, device.ip, () => {
+    device.socket?.send(message, 0, message.length, 4001, device.ip, () => {
       device.updateValues();
       device.state.isOn = 0;
       resolve();
@@ -272,7 +267,6 @@ function setOff() {
 function setOn() {
   var device = this;
   return new Promise((resolve, reject) => {
-    var _a;
     let message = JSON.stringify(
       {
         msg: {
@@ -283,7 +277,7 @@ function setOn() {
         }
       }
     );
-    (_a = device.socket) == null ? void 0 : _a.send(message, 0, message.length, 4001, device.ip, () => {
+    device.socket?.send(message, 0, message.length, 4001, device.ip, () => {
       device.updateValues();
       device.state.isOn = 1;
       resolve();
@@ -298,17 +292,16 @@ var address = "239.255.255.250";
 var port = 4002;
 var createSocket_default = () => {
   return new Promise((resolve, _reject) => {
-    var _a;
     const nets = (0, import_os.networkInterfaces)();
     for (const name of Object.keys(nets)) {
-      (_a = nets[name]) == null ? void 0 : _a.forEach((net) => {
+      nets[name]?.forEach((net) => {
         const familyV4Value = typeof net.family === "string" ? "IPv4" : 4;
         if (net.family === familyV4Value && !net.internal) {
           let socket = (0, import_node_dgram.createSocket)({
             type: "udp4",
             reuseAddr: true
           });
-          socket.on("message", (msg, remote) => {
+          socket.once("message", (msg, remote) => {
             resolve(socket);
           });
           socket.bind(port, net.address);
@@ -337,7 +330,7 @@ var createSocket_default = () => {
 // src/index.ts
 var import_events = require("events");
 var ct2 = __toESM(require("color-temperature"));
-var Device2 = class extends import_events.EventEmitter {
+var Device = class extends import_events.EventEmitter {
   constructor(data, GoveeInstance, socket) {
     super();
     deviceList.set(data.ip, this);
@@ -390,23 +383,28 @@ var actions = class {
 var deviceList = /* @__PURE__ */ new Map();
 var eventEmitter;
 var udpSocket;
-var Govee2 = class extends import_events.EventEmitter {
-  constructor(startDiscover = true) {
+var Govee = class extends import_events.EventEmitter {
+  constructor(config) {
     super();
     eventEmitter = this;
     createSocket_default().then((socket) => {
       udpSocket = socket;
       udpSocket.on("message", this.receiveMessage);
-      if (startDiscover) {
+      if (!config || config.startDiscover) {
         this.discover();
       }
+      this.emit("ready");
     });
+    var discoverInterval = 3e5;
+    if (config && config.discoverInterval) {
+      discoverInterval = config.discoverInterval;
+    }
     this.discoverInterval = setInterval(() => {
       this.discover();
-    }, 3e5);
+    }, discoverInterval);
   }
   discoverInterval;
-  async discover() {
+  discover() {
     let message = JSON.stringify(
       {
         "msg": {
@@ -421,12 +419,15 @@ var Govee2 = class extends import_events.EventEmitter {
   }
   async receiveMessage(msg, rinfo) {
     var msgRes = JSON.parse(msg.toString());
+    if (!udpSocket) {
+      return;
+    }
     var data = msgRes.msg.data;
     switch (msgRes.msg.cmd) {
       case "scan":
         var oldList = deviceList;
         if (!deviceList.has(data.ip)) {
-          var device = new Device2(data, this, udpSocket);
+          var device = new Device(data, this, udpSocket);
           device.updateValues();
         }
         oldList.forEach((device2) => {
@@ -482,21 +483,21 @@ var Govee2 = class extends import_events.EventEmitter {
     updateValues(this.devicesArray[0], true);
   }
   destroy() {
-    deviceList.forEach((device) => {
-      device.destroy();
-    });
     eventEmitter.removeAllListeners();
     deviceList = /* @__PURE__ */ new Map();
     eventEmitter = void 0;
+    udpSocket.close();
     udpSocket = void 0;
     clearInterval(this.discoverInterval);
+    deviceList.forEach((device) => {
+      device.destroy();
+    });
   }
 };
-var src_default = Govee2;
+var src_default = Govee;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  Device,
-  udpSocket
+  Device
 });
 //! Commands have to be send twice te be caught by devstatus... annoying
 //# sourceMappingURL=index.js.map

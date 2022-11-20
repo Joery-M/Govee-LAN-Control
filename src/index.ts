@@ -1,28 +1,9 @@
-import { RemoteInfo, Socket } from 'dgram';
+import { RemoteInfo, Socket, createSocket } from 'dgram';
 import { fade, setBrightness, setColor, updateValues } from './commands/setColors';
 import { setOff, setOn } from './commands/setOnOff';
 import getSocket from './commands/createSocket';
 import { EventEmitter } from 'events';
 import * as ct from 'color-temperature';
-
-interface DeviceEventTypes
-{
-    updatedStatus: [data: DataResponseStatus, stateChanged: stateChangedOptions];
-    destroyed: [];
-}
-
-export declare interface Device
-{
-    on<K extends keyof DeviceEventTypes> (
-        event: K,
-        listener: (...args: DeviceEventTypes[K]) => any,
-    ): this;
-
-    once<K extends keyof DeviceEventTypes> (
-        event: K,
-        listener: (...args: DeviceEventTypes[K]) => any,
-    ): this;
-}
 
 export class Device extends EventEmitter
 {
@@ -130,34 +111,28 @@ class actions
     setOn = (): Promise<void> => setOn.call(this.device);
 }
 
-interface GoveeEventTypes
+class GoveeConfig
 {
-    ready: [];
-    deviceAdded: [device: Device];
-    deviceRemoved: [device: Device];
-    updatedStatus: [device: Device, data: DataResponseStatus, stateChanged: stateChangedOptions];
-}
-declare interface Govee
-{
-    on<K extends keyof GoveeEventTypes> (
-        event: K,
-        listener: (...args: GoveeEventTypes[K]) => any,
-    ): this;
-
-    once<K extends keyof GoveeEventTypes> (
-        event: K,
-        listener: (...args: GoveeEventTypes[K]) => any,
-    ): this;
+    /**
+     * Automatically start searching for devices when the UDP socket is made.
+     * @default true
+     */
+    startDiscover: boolean = true;
+    /**
+     * The interval (in ms) at which new devices will be scanned for.
+     * @default 300000 (5 minutes)
+     */
+    discoverInterval: number = 300000;
 }
 
-//TODO: I have no idea why i have to define the variables outside the class. I'm only able to access the socket when using "this"
+//TODO: I have no idea why i have to define the variables outside the class. But when theyre inside the class, they're always undefined outside of the constructor.
 var deviceList = new Map<string, Device>();
 var eventEmitter: EventEmitter;
-export var udpSocket: Socket;
+var udpSocket: Socket;
 
 class Govee extends EventEmitter
 {
-    constructor(startDiscover: boolean = true)
+    constructor(config?: GoveeConfig)
     {
         super();
         eventEmitter = this;
@@ -169,23 +144,38 @@ class Govee extends EventEmitter
             udpSocket.on("message", this.receiveMessage);
 
             //? Now that we have a socket, we can scan (again)
-            //TODO: This can probably combined into 1, but i don't want to risk it, seeing as i have 1 govee device
-            if (startDiscover)
+            //TODO: Creating the socket and scanning can probably combined into 1, but i don't want to risk it, seeing as i have 1 govee device
+            if (!config || config.startDiscover)
             {
                 this.discover();
             }
+
+            this.emit("ready");
         });
+
+        var discoverInterval = 300_000;
+
+        if (config && config.discoverInterval)
+        {
+            discoverInterval = config.discoverInterval;
+        }
 
         this.discoverInterval = setInterval(() =>
         {
             this.discover();
-        }, 300000);
+        }, discoverInterval);
     }
 
     private discoverInterval: NodeJS.Timer;
 
 
-    async discover ()
+    /**
+     * @description
+     * Use this function to re-send the command to scan for devices.
+     * 
+     * Note that you typically don't have to run this command yourself. 
+     */
+    public discover ()
     {
         let message = JSON.stringify(
             {
@@ -203,6 +193,10 @@ class Govee extends EventEmitter
     private async receiveMessage (msg: Buffer, rinfo: RemoteInfo)
     {
         var msgRes: messageResponse = JSON.parse(msg.toString());
+        if (!udpSocket)
+        {
+            return;
+        }
         var data = msgRes.msg.data;
         switch (msgRes.msg.cmd)
         {
@@ -240,7 +234,7 @@ class Govee extends EventEmitter
                     device.state.colorKelvin = data.color.colorTemInKelvin;
                 }
 
-                var stateChanged: string[] = [];
+                var stateChanged: stateChangedOptions = [];
                 var colorChanged = oldState.color.r !== data.color.r || oldState.color.g !== data.color.g || oldState.color.b !== data.color.b;
                 var brightnessChanged = oldState.brightness !== data.brightness;
                 var onOffChanged = oldState.isOn !== data.onOff;
@@ -264,7 +258,7 @@ class Govee extends EventEmitter
                 {
                     stateChanged.push("onOff");
                 }
-                device.emit("updatedStatus", data, stateChanged);
+                device.emit("updatedStatus", data as DataResponseStatus, stateChanged as stateChangedOptions);
                 eventEmitter.emit("updatedStatus", device, data, stateChanged);
                 break;
 
@@ -290,16 +284,17 @@ class Govee extends EventEmitter
 
     public destroy ()
     {
+        eventEmitter.removeAllListeners();
+        deviceList = new Map<string, Device>();
+        eventEmitter = undefined;
+        udpSocket.close();
+        udpSocket = undefined;
+        clearInterval(this.discoverInterval);
         //? Loop over all devices and clear their timeouts
         deviceList.forEach((device) =>
         {
             device.destroy();
         });
-        eventEmitter.removeAllListeners();
-        deviceList = new Map<string, Device>();
-        eventEmitter = undefined;
-        udpSocket = undefined;
-        clearInterval(this.discoverInterval)
     }
 }
 
@@ -363,3 +358,63 @@ interface colorOptionsKelvin
     kelvin: string | number;
 }
 export type colorOptions = colorOptionsHex | colorOptionsRGB | colorOptionsHSL | colorOptionsKelvin;
+
+
+type DeviceEventTypes =
+    {
+        updatedStatus: (data: DataResponseStatus, stateChanged: stateChangedOptions) => void;
+        destroyed: () => void;
+    };
+
+export declare interface Device
+{
+    addListener<E extends keyof DeviceEventTypes> (event: E, listener: DeviceEventTypes[E]): this;
+    on<E extends keyof DeviceEventTypes> (event: E, listener: DeviceEventTypes[E]): this;
+    once<E extends keyof DeviceEventTypes> (event: E, listener: DeviceEventTypes[E]): this;
+    prependListener<E extends keyof DeviceEventTypes> (event: E, listener: DeviceEventTypes[E]): this;
+    prependOnceListener<E extends keyof DeviceEventTypes> (event: E, listener: DeviceEventTypes[E]): this;
+
+    off<E extends keyof DeviceEventTypes> (event: E, listener: DeviceEventTypes[E]): this;
+    removeAllListeners<E extends keyof DeviceEventTypes> (event?: E): this;
+    removeListener<E extends keyof DeviceEventTypes> (event: E, listener: DeviceEventTypes[E]): this;
+
+    emit<E extends keyof DeviceEventTypes> (event: E, ...args: Parameters<DeviceEventTypes[E]>): boolean;
+    // The sloppy `eventNames()` return type is to mitigate type incompatibilities - see #5
+    eventNames (): (keyof DeviceEventTypes | string | symbol)[];
+    rawListeners<E extends keyof DeviceEventTypes> (event: E): DeviceEventTypes[E][];
+    listeners<E extends keyof DeviceEventTypes> (event: E): DeviceEventTypes[E][];
+    listenerCount<E extends keyof DeviceEventTypes> (event: E): number;
+
+    getMaxListeners (): number;
+    setMaxListeners (maxListeners: number): this;
+}
+
+type GoveeEventTypes = {
+    ready: () => void;
+    deviceAdded: (device: Device) => void;
+    deviceRemoved: (device: Device) => void;
+    updatedStatus: (device: Device, data: DataResponseStatus, stateChanged: stateChangedOptions) => void;
+};
+
+interface Govee
+{
+    addListener<E extends keyof GoveeEventTypes> (event: E, listener: GoveeEventTypes[E]): this;
+    on<E extends keyof GoveeEventTypes> (event: E, listener: GoveeEventTypes[E]): this;
+    once<E extends keyof GoveeEventTypes> (event: E, listener: GoveeEventTypes[E]): this;
+    prependListener<E extends keyof GoveeEventTypes> (event: E, listener: GoveeEventTypes[E]): this;
+    prependOnceListener<E extends keyof GoveeEventTypes> (event: E, listener: GoveeEventTypes[E]): this;
+
+    off<E extends keyof GoveeEventTypes> (event: E, listener: GoveeEventTypes[E]): this;
+    removeAllListeners<E extends keyof GoveeEventTypes> (event?: E): this;
+    removeListener<E extends keyof GoveeEventTypes> (event: E, listener: GoveeEventTypes[E]): this;
+
+    emit<E extends keyof GoveeEventTypes> (event: E, ...args: Parameters<GoveeEventTypes[E]>): boolean;
+    // The sloppy `eventNames()` return type is to mitigate type incompatibilities - see #5
+    eventNames (): (keyof GoveeEventTypes | string | symbol)[];
+    rawListeners<E extends keyof GoveeEventTypes> (event: E): GoveeEventTypes[E][];
+    listeners<E extends keyof GoveeEventTypes> (event: E): GoveeEventTypes[E][];
+    listenerCount<E extends keyof GoveeEventTypes> (event: E): number;
+
+    getMaxListeners (): number;
+    setMaxListeners (maxListeners: number): this;
+}

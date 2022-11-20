@@ -1,4 +1,4 @@
-import Govee, { colorOptions, DataResponseStatus, Device, fadeOptions, udpSocket } from "..";
+import Govee, { colorOptions, DataResponseStatus, Device, fadeOptions } from "..";
 import { hex, hsl, rgb } from "color-convert";
 import * as ct from 'color-temperature';
 
@@ -275,7 +275,7 @@ export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): 
             }
 
             // Kelvin step
-            if (options.color.kelvin !== undefined)
+            if (options.color && options.color.kelvin !== undefined)
             {
                 stepKelvin(percent, targetKelvin);
             }
@@ -315,11 +315,11 @@ export function updateValues (device?: Device, updateAll?: boolean)
         );
         if (!updateAll)
         {
-            udpSocket.send(message, 0, message.length, 4001, device.ip);
+            device.socket.send(message, 0, message.length, 4001, device.ip);
             resolve();
         } else
         {
-            udpSocket.send(message, 0, message.length, 4001, "239.255.255.250");
+            device.socket.send(message, 0, message.length, 4001, "239.255.255.250");
             resolve();
         }
     });

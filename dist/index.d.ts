@@ -1,38 +1,6 @@
 import { Socket } from 'dgram';
 import { EventEmitter } from 'events';
 
-interface DeviceEventTypes {
-    updatedStatus: [data: DataResponseStatus, stateChanged: stateChangedOptions];
-    destroyed: [];
-}
-declare interface Device {
-    on<K extends keyof DeviceEventTypes>(event: K, listener: (...args: DeviceEventTypes[K]) => any): this;
-    once<K extends keyof DeviceEventTypes>(event: K, listener: (...args: DeviceEventTypes[K]) => any): this;
-}
-declare class Device extends EventEmitter {
-    constructor(data: Record<string, any>, GoveeInstance: Govee, socket: Socket);
-    readonly ip: string;
-    readonly deviceID: string;
-    readonly model: string;
-    readonly socket: Socket;
-    readonly versions: {
-        BLEhardware: string;
-        BLEsoftware: string;
-        WiFiHardware: string;
-        WiFiSoftware: string;
-    };
-    state: {
-        isOn: number;
-        brightness: number;
-        color: Record<string, number>;
-        colorKelvin: number;
-        hasReceivedUpdates: boolean;
-    };
-    readonly actions: actions;
-    readonly updateValues: Function;
-    private updateTimer;
-    destroy: () => void;
-}
 declare class actions {
     constructor(device: Device);
     private device;
@@ -72,26 +40,17 @@ declare class actions {
      */
     setOn: () => Promise<void>;
 }
-interface GoveeEventTypes {
-    ready: [];
-    deviceAdded: [device: Device];
-    deviceRemoved: [device: Device];
-    updatedStatus: [device: Device, data: DataResponseStatus, stateChanged: stateChangedOptions];
-}
-declare var udpSocket: Socket;
-declare interface Govee {
-    on<K extends keyof GoveeEventTypes>(event: K, listener: (...args: GoveeEventTypes[K]) => any): this;
-    once<K extends keyof GoveeEventTypes>(event: K, listener: (...args: GoveeEventTypes[K]) => any): this;
-}
-declare class Govee extends EventEmitter {
-    constructor(startDiscover?: boolean);
-    private discoverInterval;
-    discover(): Promise<void>;
-    private receiveMessage;
-    get devicesMap(): Map<string, Device>;
-    get devicesArray(): Device[];
-    updateAllDevices(): void;
-    destroy(): void;
+declare class GoveeConfig {
+    /**
+     * Automatically start searching for devices when the UDP socket is made.
+     * @default true
+     */
+    startDiscover: boolean;
+    /**
+     * The interval (in ms) at which new devices will be scanned for.
+     * @default 300000 (5 minutes)
+     */
+    discoverInterval: number;
 }
 
 interface DataResponseStatus {
@@ -104,7 +63,7 @@ interface DataResponseStatus {
     };
     colorTemInKelvin: number;
 }
-declare type stateChangedOptions = ("onOff" | "brightness" | "color" | undefined)[];
+type stateChangedOptions = ("onOff" | "brightness" | "color" | undefined)[];
 interface fadeOptions {
     time: number;
     color?: colorOptions;
@@ -134,6 +93,90 @@ interface colorOptionsKelvin {
     hsl?: never;
     kelvin: string | number;
 }
-declare type colorOptions = colorOptionsHex | colorOptionsRGB | colorOptionsHSL | colorOptionsKelvin;
+type colorOptions = colorOptionsHex | colorOptionsRGB | colorOptionsHSL | colorOptionsKelvin;
+type DeviceEventTypes = {
+    updatedStatus: (data: DataResponseStatus, stateChanged: stateChangedOptions) => void;
+    destroyed: () => void;
+};
+declare class Device extends EventEmitter {
+    constructor(data: Record<string, any>, GoveeInstance: Govee, socket: Socket);
+    readonly ip: string;
+    readonly deviceID: string;
+    readonly model: string;
+    readonly socket: Socket;
+    readonly versions: {
+        BLEhardware: string;
+        BLEsoftware: string;
+        WiFiHardware: string;
+        WiFiSoftware: string;
+    };
+    state: {
+        isOn: number;
+        brightness: number;
+        color: Record<string, number>;
+        colorKelvin: number;
+        hasReceivedUpdates: boolean;
+    };
+    readonly actions: actions;
+    readonly updateValues: Function;
+    private updateTimer;
+    destroy: () => void;
+}
+declare interface Device {
+    addListener<E extends keyof DeviceEventTypes>(event: E, listener: DeviceEventTypes[E]): this;
+    on<E extends keyof DeviceEventTypes>(event: E, listener: DeviceEventTypes[E]): this;
+    once<E extends keyof DeviceEventTypes>(event: E, listener: DeviceEventTypes[E]): this;
+    prependListener<E extends keyof DeviceEventTypes>(event: E, listener: DeviceEventTypes[E]): this;
+    prependOnceListener<E extends keyof DeviceEventTypes>(event: E, listener: DeviceEventTypes[E]): this;
+    off<E extends keyof DeviceEventTypes>(event: E, listener: DeviceEventTypes[E]): this;
+    removeAllListeners<E extends keyof DeviceEventTypes>(event?: E): this;
+    removeListener<E extends keyof DeviceEventTypes>(event: E, listener: DeviceEventTypes[E]): this;
+    emit<E extends keyof DeviceEventTypes>(event: E, ...args: Parameters<DeviceEventTypes[E]>): boolean;
+    eventNames(): (keyof DeviceEventTypes | string | symbol)[];
+    rawListeners<E extends keyof DeviceEventTypes>(event: E): DeviceEventTypes[E][];
+    listeners<E extends keyof DeviceEventTypes>(event: E): DeviceEventTypes[E][];
+    listenerCount<E extends keyof DeviceEventTypes>(event: E): number;
+    getMaxListeners(): number;
+    setMaxListeners(maxListeners: number): this;
+}
+type GoveeEventTypes = {
+    ready: () => void;
+    deviceAdded: (device: Device) => void;
+    deviceRemoved: (device: Device) => void;
+    updatedStatus: (device: Device, data: DataResponseStatus, stateChanged: stateChangedOptions) => void;
+};
+declare class Govee extends EventEmitter {
+    constructor(config?: GoveeConfig);
+    private discoverInterval;
+    /**
+     * @description
+     * Use this function to re-send the command to scan for devices.
+     *
+     * Note that you typically don't have to run this command yourself.
+     */
+    discover(): void;
+    private receiveMessage;
+    get devicesMap(): Map<string, Device>;
+    get devicesArray(): Device[];
+    updateAllDevices(): void;
+    destroy(): void;
+}
+interface Govee {
+    addListener<E extends keyof GoveeEventTypes>(event: E, listener: GoveeEventTypes[E]): this;
+    on<E extends keyof GoveeEventTypes>(event: E, listener: GoveeEventTypes[E]): this;
+    once<E extends keyof GoveeEventTypes>(event: E, listener: GoveeEventTypes[E]): this;
+    prependListener<E extends keyof GoveeEventTypes>(event: E, listener: GoveeEventTypes[E]): this;
+    prependOnceListener<E extends keyof GoveeEventTypes>(event: E, listener: GoveeEventTypes[E]): this;
+    off<E extends keyof GoveeEventTypes>(event: E, listener: GoveeEventTypes[E]): this;
+    removeAllListeners<E extends keyof GoveeEventTypes>(event?: E): this;
+    removeListener<E extends keyof GoveeEventTypes>(event: E, listener: GoveeEventTypes[E]): this;
+    emit<E extends keyof GoveeEventTypes>(event: E, ...args: Parameters<GoveeEventTypes[E]>): boolean;
+    eventNames(): (keyof GoveeEventTypes | string | symbol)[];
+    rawListeners<E extends keyof GoveeEventTypes>(event: E): GoveeEventTypes[E][];
+    listeners<E extends keyof GoveeEventTypes>(event: E): GoveeEventTypes[E][];
+    listenerCount<E extends keyof GoveeEventTypes>(event: E): number;
+    getMaxListeners(): number;
+    setMaxListeners(maxListeners: number): this;
+}
 
-export { DataResponseStatus, Device, colorOptions, Govee as default, fadeOptions, stateChangedOptions, udpSocket };
+export { DataResponseStatus, Device, colorOptions, Govee as default, fadeOptions, stateChangedOptions };

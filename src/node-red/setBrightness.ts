@@ -1,6 +1,7 @@
 import * as registry from "@node-red/registry";
 import { Node, NodeAPISettingsWithData, NodeDef } from "node-red";
 import Govee, { Device } from "../index";
+import { govee as GoveeInstance } from "./main";
 
 var deviceIDregex = /([A-f0-9]{2}:){7}[A-z0-9]{2}/i;
 

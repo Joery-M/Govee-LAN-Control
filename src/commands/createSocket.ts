@@ -10,7 +10,7 @@ export default (): Promise<Socket> =>
     return new Promise((resolve, _reject) =>
     {
         const nets = networkInterfaces();
-        
+
         //* Modified from https://stackoverflow.com/a/8440736/11186759
         for (const name of Object.keys(nets))
         {
@@ -23,9 +23,10 @@ export default (): Promise<Socket> =>
                         type: 'udp4',
                         reuseAddr: true // for testing multiple instances on localhost
                     });
-                    socket.on('message', (msg, remote) =>
+
+                    socket.once('message', (msg, remote) =>
                     {
-                        resolve(socket)
+                        resolve(socket);
                     });
 
 
