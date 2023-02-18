@@ -20,8 +20,32 @@
         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
-</script>
-
-<script type="text/x-red" data-help-name="Device Added">
-    <p>Using UDP</p>
+    <div class="form-row" style="width: inherit;">
+        <p>Here is an example response you can expect:</p>
+<pre>{
+    <span class="mtk20">"payload":</span> {
+        <span class="mtk20">"ip":</span> <span class="mtk5">"192.168.178.70"</span>,
+        <span class="mtk20">"id":</span> <span class="mtk5">"6C:25:D4:AD:FC:1A:D0:4D"</span>,
+        <span class="mtk20">"model":</span> <span class="mtk5">"H610A"</span>,
+        <span class="mtk20">"state":</span> {
+            <span class="mtk20">"isOn":</span> <span class="mtk7">1</span>,
+            <span class="mtk20">"brightness":</span> <span class="mtk7">100</span>,
+            <span class="mtk20">"color":</span> {
+                <span class="mtk20">"r":</span> <span class="mtk7">255</span>,
+                <span class="mtk20">"g":</span> <span class="mtk7">108</span>,
+                <span class="mtk20">"b":</span> <span class="mtk7">0</span>
+            },
+            <span class="mtk20">"colorKelvin":</span> <span class="mtk7">1500</span>,
+            <span class="mtk20">"hasReceivedUpdates":</span> <span class="mtk5">true</span>
+        },
+        <span class="mtk20">"versions":</span> {
+            <span class="mtk20">"BLEhardware":</span> <span class="mtk5">"3.01.01"</span>,
+            <span class="mtk20">"BLEsoftware":</span> <span class="mtk5">"1.03.01"</span>,
+            <span class="mtk20">"WiFiHardware":</span> <span class="mtk5">"1.00.10"</span>,
+            <span class="mtk20">"WiFiSoftware":</span> <span class="mtk5">"1.02.03"</span>
+        }
+    },
+    <span class="mtk20">"topic":</span> <span class="mtk5">"GoveeDeviceChange"</span>
+}</pre>
+    </div>
 </script>

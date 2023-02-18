@@ -1,6 +1,7 @@
 import * as registry from "@node-red/registry";
 import { Node, NodeAPISettingsWithData, NodeDef } from "node-red";
 import Govee, { Device } from "../index";
+import { govee } from "./globalData";
 
 var deviceIDregex = /([A-f0-9]{2}:){7}[A-z0-9]{2}/i;
 
@@ -16,8 +17,6 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
 
         node.on("input", async (msg) =>
         {
-            const govee = node.context().global.get("govee") as Govee;
-
             var device: Device;
             if (deviceIDregex.test(config.device))
             {
@@ -25,35 +24,47 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
             } else if (deviceIPregex.test(config.device))
             {
                 device = govee.devicesMap.get(config.device);
-            } else
+            } else if (config.device !== "all")
             {
                 RED.log.error("Unknown device ID or IP passed: " + config.device);
                 return;
             }
 
-            debugger
-            if (config.powerState == "on")
+            if (config.device == "all")
             {
-                device.actions.setOn().then(async () =>
+                govee.devicesArray.forEach((arrayDevice) =>
                 {
-                    await device.updateValues()
-                    node.send(msg)
-                }).catch((res) =>
-                {
-                    RED.log.error(res);
+                    setDevicePower(arrayDevice);
                 });
-            } else if (config.powerState == "off")
+            } else
             {
-                device.actions.setOff().then(async () =>
+                setDevicePower(device);
+            }
+
+            function setDevicePower (device: Device)
+            {
+                if (config.powerState == "on")
                 {
-                    await device.updateValues()
-                    setTimeout(() => {
+                    device.actions.setOn().then(async () =>
+                    {
                         node.send(msg);
-                    }, 1);
-                }).catch((res) =>
+                    }).catch((res) =>
+                    {
+                        RED.log.error(res);
+                    });
+                } else if (config.powerState == "off")
                 {
-                    RED.log.error(res);
-                });
+                    device.actions.setOff().then(async () =>
+                    {
+                        setTimeout(() =>
+                        {
+                            node.send(msg);
+                        }, 1);
+                    }).catch((res) =>
+                    {
+                        RED.log.error(res);
+                    });
+                }
             }
         });
     }

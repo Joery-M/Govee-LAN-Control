@@ -1,6 +1,17 @@
 import { Socket } from 'dgram';
 import { EventEmitter } from 'events';
 
+interface DeviceState {
+    isOn: number;
+    brightness: number;
+    color: {
+        "r": number;
+        "g": number;
+        "b": number;
+    };
+    colorKelvin: number;
+    hasReceivedUpdates: boolean;
+}
 declare class actions {
     constructor(device: Device);
     private device;
@@ -45,12 +56,12 @@ declare class GoveeConfig {
      * Automatically start searching for devices when the UDP socket is made.
      * @default true
      */
-    startDiscover: boolean;
+    startDiscover?: boolean;
     /**
      * The interval (in ms) at which new devices will be scanned for.
-     * @default 300000 (5 minutes)
+     * @default 60000 (1 minute)
      */
-    discoverInterval: number;
+    discoverInterval?: number;
 }
 
 interface DataResponseStatus {
@@ -95,7 +106,7 @@ interface colorOptionsKelvin {
 }
 type colorOptions = colorOptionsHex | colorOptionsRGB | colorOptionsHSL | colorOptionsKelvin;
 type DeviceEventTypes = {
-    updatedStatus: (data: DataResponseStatus, stateChanged: stateChangedOptions) => void;
+    updatedStatus: (data: DeviceState, stateChanged: stateChangedOptions) => void;
     destroyed: () => void;
 };
 declare class Device extends EventEmitter {
@@ -110,15 +121,9 @@ declare class Device extends EventEmitter {
         WiFiHardware: string;
         WiFiSoftware: string;
     };
-    state: {
-        isOn: number;
-        brightness: number;
-        color: Record<string, number>;
-        colorKelvin: number;
-        hasReceivedUpdates: boolean;
-    };
+    state: DeviceState;
     readonly actions: actions;
-    readonly updateValues: Function;
+    readonly updateValues: () => Promise<void>;
     private updateTimer;
     destroy: () => void;
 }
@@ -143,22 +148,35 @@ type GoveeEventTypes = {
     ready: () => void;
     deviceAdded: (device: Device) => void;
     deviceRemoved: (device: Device) => void;
-    updatedStatus: (device: Device, data: DataResponseStatus, stateChanged: stateChangedOptions) => void;
+    updatedStatus: (device: Device, data: DeviceState, stateChanged: stateChangedOptions) => void;
 };
 declare class Govee extends EventEmitter {
+    private config?;
+    private isReady;
     constructor(config?: GoveeConfig);
     private discoverInterval;
+    private getSocket;
     /**
      * @description
      * Use this function to re-send the command to scan for devices.
      *
      * Note that you typically don't have to run this command yourself.
      */
-    discover(): void;
+    discover: () => void;
+    private discoverTimes;
     private receiveMessage;
+    /**
+     * A map of devices where the devices' IP is the key, and the Device object is the value.
+     */
     get devicesMap(): Map<string, Device>;
+    /**
+     * An array of all devices.
+     */
     get devicesArray(): Device[];
-    updateAllDevices(): void;
+    /**
+     * Retrieve the values of all devices.
+     */
+    updateAllDevices(): Promise<void>;
     destroy(): void;
 }
 interface Govee {
@@ -179,4 +197,4 @@ interface Govee {
     setMaxListeners(maxListeners: number): this;
 }
 
-export { DataResponseStatus, Device, colorOptions, Govee as default, fadeOptions, stateChangedOptions };
+export { DataResponseStatus, Device, DeviceState, colorOptions, Govee as default, fadeOptions, stateChangedOptions };

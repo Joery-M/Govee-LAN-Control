@@ -1,7 +1,7 @@
 import * as registry from "@node-red/registry";
 import { Node, NodeAPISettingsWithData, NodeDef } from "node-red";
 import Govee, { Device } from "../index";
-import { govee as GoveeInstance } from "./main";
+import { govee } from "./globalData";
 
 var deviceIDregex = /([A-f0-9]{2}:){7}[A-z0-9]{2}/i;
 
@@ -17,8 +17,6 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
 
         node.on("input", async (msg) =>
         {
-            const govee = node.context().global.get("govee") as Govee;
-
             var device: Device;
             if (deviceIDregex.test(config.device))
             {
@@ -26,7 +24,7 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
             } else if (deviceIPregex.test(config.device))
             {
                 device = govee.devicesMap.get(config.device);
-            } else
+            } else if (config.device !== "all")
             {
                 RED.log.error("Unknown device ID or IP passed: " + config.device);
                 return;
@@ -34,8 +32,8 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
 
             var payload = msg.payload as Record<string, any>;
 
-            var bright = payload.brightness;
-            if (config.brightness !== "")
+            var bright = payload ? payload.brightness : 0;
+            if (config.brightness !== undefined && config.brightness !== "")
             {
                 bright = config.brightness;
             } else if (!payload.brightness)
@@ -44,16 +42,30 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
                 return;
             }
 
-            device.actions.setBrightness(bright).then(async () =>
+            if (config.device == "all")
             {
-                await device.updateValues()
-                setTimeout(() => {
-                    node.send(msg);
-                }, 1);
-            }).catch((res) =>
+                govee.devicesArray.forEach((arrayDevice) =>
+                {
+                    setDeviceBrightness(arrayDevice, bright);
+                });
+            } else
             {
-                RED.log.error(res);
-            });
+                setDeviceBrightness(device, bright);
+            }
+
+            function setDeviceBrightness (device: Device, bright: number)
+            {
+                device.actions.setBrightness(bright).then(async () =>
+                {
+                    setTimeout(() =>
+                    {
+                        node.send(msg);
+                    }, 1);
+                }).catch((res) =>
+                {
+                    RED.log.error(res);
+                });
+            }
         });
     }
     RED.nodes.registerType("Set Brightness", setBrightNode);

@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2023-02-18
+
+### Added
+
+- Device removed node (Should have done this in v2.0.0, honestly)
+- Device changed node
+- Example flows in the examples folder
+- An `Identify` button next to the device selector that will flash the light red green and blue.
+- An option to change all devices at once
+- Nodes in Node-RED now have examples of how to use the JSON input. (Came to mind thanks to [hoschult](https://github.com/Joery-M/Govee-LAN-Control/issues/4))
+
+### Fixed
+
+- Govee.updateAllDevices only updating the first device
+- UDP Socket not reconnecting
+
+### Changed
+
+- The way you select devices in Node-RED. It now uses a dropdown menu. (Thanks to [Otávio Ribeiro](https://github.com/otaviojr) from the [Smartthings](https://github.com/otaviojr/node-red-contrib-smartthings) plugin for having open-source and easy to read code)
+- How nodes access the Govee instance
+
 ## [2.1.0] - 2022-11-20
 
 ### Added
@@ -19,7 +40,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - `Govee.discover()` is no longer async since it didn't have to.
-- The single paramater for `new Govee(param)` to be an object which will be able to 
+- The single paramater for `new Govee(param)` to be an object which will be able to
 
 ## [2.0.1] - 2022-10-10
 

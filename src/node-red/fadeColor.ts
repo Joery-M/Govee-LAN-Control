@@ -1,6 +1,7 @@
 import * as registry from "@node-red/registry";
 import { Node, NodeAPISettingsWithData, NodeDef } from "node-red";
 import Govee, { colorOptions, Device, fadeOptions } from "../index";
+import { govee } from "./globalData";
 
 var deviceIDregex = /([A-f0-9]{2}:){7}[A-z0-9]{2}/i;
 
@@ -16,8 +17,6 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
 
         node.on("input", async (msg) =>
         {
-            const govee = node.context().global.get("govee") as Govee;
-
             var device: Device;
             if (deviceIDregex.test(config.device))
             {
@@ -29,13 +28,6 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
             {
                 RED.log.error("Unknown device ID or IP passed: " + config.device);
             }
-
-            await device.updateValues()
-            await new Promise<void>((resolve, reject) => {
-                setTimeout(() => {
-                    resolve()
-                }, 100);
-            });
 
             var payload = msg.payload as Record<string, any>;
 
@@ -78,16 +70,31 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
                 return;
             }
 
-            device.actions.fadeColor(newColor).then(async () =>
+            if (config.device == "all")
             {
-                await device.updateValues();
-                setTimeout(() => {
-                    node.send(msg);
-                }, 1);
-            }).catch((res) =>
+                govee.devicesArray.forEach((arrayDevice) =>
+                {
+                    fadeDeviceColor(arrayDevice, newColor);
+                });
+            } else
             {
-                RED.log.error(res);
-            });
+                fadeDeviceColor(device, newColor);
+            }
+
+            function fadeDeviceColor (device: Device, newColor: fadeOptions)
+            {
+                device.actions.fadeColor(newColor).then(async () =>
+                {
+                    await device.updateValues();
+                    setTimeout(() =>
+                    {
+                        node.send(msg);
+                    }, 50);
+                }).catch((res) =>
+                {
+                    RED.log.error(res);
+                });
+            }
         });
     }
     RED.nodes.registerType("Fade Color", fadeColorNode);

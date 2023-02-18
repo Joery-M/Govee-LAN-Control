@@ -4,7 +4,7 @@
         color: '#00a8e2',
         defaults: {
             name: { value: "" },
-            device: { value: "", validate: RED.validators.regex(/(([A-f0-9]{2}:){7}[A-z0-9]{2})|(\b(?:(?:2(?:[0-4][0-9]|5[0-5])|[0-1]?[0-9]?[0-9])\.){3}(?:(?:2([0-4][0-9]|5[0-5])|[0-1]?[0-9]?[0-9]))\b)/i) },
+            device: { value: "all", required: true },
             color: { value: "" }
         },
         inputs: 1,
@@ -13,6 +13,61 @@
         label: function ()
         {
             return this.name || "Set Color";
+        },
+        oneditprepare: function ()
+        {
+            $.getJSON("/govee/devices", (res) =>
+            {
+                $("#node-input-device").empty();
+
+                if (res.length == 0)
+                {
+                    $('<option/>', {
+                        value: "",
+                        text: "No devices found"
+                    }).appendTo('#node-input-device');
+                    return;
+                }
+                res = res.sort((a, b) => a.model.localeCompare(b.model));
+
+                // Add the "All" option
+                $('<option/>', {
+                    value: "all",
+                    text: "All"
+                }).appendTo('#node-input-device');
+
+                res.forEach((device) =>
+                {
+                    // Check if there are duplicates, if so, add the IP
+                    var hasDuplicate = res.findIndex((el) => el.model == device.model) !== res.findLastIndex((el) => el.model == device.model);
+                    $('<option/>', {
+                        value: device.deviceID,
+                        text: device.model + (hasDuplicate ? " (IP: " + device.ip + ")" : "")
+                    }).appendTo('#node-input-device');
+                });
+
+                //* https://regexr.com/38odc
+                var deviceIPregex = /\b(?:(?:2(?:[0-4][0-9]|5[0-5])|[0-1]?[0-9]?[0-9])\.){3}(?:(?:2([0-4][0-9]|5[0-5])|[0-1]?[0-9]?[0-9]))\b/ig;
+                if (this.device)
+                {
+                    // If the user has entered an IP before the switch to select menus, find the device via the IP
+                    if (deviceIPregex.test(this.device))
+                    {
+                        var device = res.find((device) => device.ip == this.device);
+                        $("#node-input-device").val(device.deviceID);
+                        this.device = device.deviceID;
+                        console.log("Corrected IP to ID for select menu");
+                    } else
+                    {
+                        $("#node-input-device").val(this.device);
+                    }
+                }
+            });
+
+            $("#node-button-identify").on("click", () =>
+            {
+                $.get("/govee/identifyDevice?device=" + encodeURIComponent($("#node-input-device").val()));
+            });
         }
     });
 </script>
@@ -23,13 +78,32 @@
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
     <div class="form-row">
-        <label for="node-input-device"><i class="icon-tag"></i> Device ID or IP</label>
-        <input type="text" id="node-input-device" placeholder="xx:xx:xx:xx:xx:xx:xx:xx or xxx.xxx.xxx.xxx">
-        <span style="display: block; padding-left: 106px; color: gray; font-size: small;">ID is safer to use than IP.</span>
+        <label for="node-input-device"><i class="icon-tag"></i> Device</label>
+        <!-- <input type="text" id="node-input-device" placeholder="xx:xx:xx:xx:xx:xx:xx:xx or xxx.xxx.xxx.xxx"> -->
+        <select id="node-input-device">
+            <option value="">Loading...</option>
+        </select>
+        <button id="node-button-identify" class="ui-button" title="This will flash red, green and blue individually.">Identify</button>
     </div>
     <div class="form-row">
         <label for="node-input-color"><i class="icon-tag"></i> Color</label>
         <input type="color" id="node-input-color">
-        <span style="display: block; padding-left: 106px; color: gray; font-size: small;">If the color is black, JSON input is used.<br>For JSON, see <a href="https://joery.com/govee-lan-control/docs/classes/device#color-options" target="_blank">Color options</a></span>
+        <p style="display: block; padding-left: 106px; color: gray; font-size: small;">
+            <span style="display: block;">If the color is black, JSON input is used from the <code>msg.payload</code>.<br>For examples of how to use the input, see below:</span>
+
+<h2>JSON input examples:</h2>
+<pre>{
+  <span class="mtk20">"rgb":</span> [<span class="mtk7">255</span>, <span class="mtk7">255</span>, <span class="mtk7">0</span>]
+}</pre>
+<pre>{
+  <span class="mtk20">"hex":</span> <span class="mtk5">"#000004"</span>
+}</pre>
+<pre>{
+  <span class="mtk20">"hsl":</span> [<span class="mtk7">100</span>, <span class="mtk7">50</span>, <span class="mtk7">100</span>]
+}</pre>
+<pre>{
+  <span class="mtk20">"kelvin":</span> <span class="mtk7">4000</span>
+}</pre>
+        </p>
     </div>
 </script>

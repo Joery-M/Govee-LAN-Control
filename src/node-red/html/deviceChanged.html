@@ -1,30 +1,18 @@
 <script type="text/javascript">
-    RED.nodes.registerType('Fade Color', {
+    RED.nodes.registerType('Device Changed', {
         category: 'Govee',
         color: '#00a8e2',
         defaults: {
             name: { value: "" },
             device: { value: "all", required: true },
-            time: {
-                value: "", validate: (num) =>
-                {
-                    return parseFloat(num) >= 0 || !num;
-                }
-            },
-            color: { value: "" },
-            brightness: {
-                value: "", validate: (num) =>
-                {
-                    return (parseFloat(num) >= 0 && parseFloat(num) <= 100) || num == "";
-                }
-            }
+            trigger: { value: "onOff,brightness,color" }
         },
-        inputs: 1,
+        inputs: 0,
         outputs: 1,
         icon: "Govee.svg",
         label: function ()
         {
-            return this.name || "Fade Color";
+            return this.name || "Device Changed";
         },
         oneditprepare: function ()
         {
@@ -80,12 +68,25 @@
             {
                 $.get("/govee/identifyDevice?device=" + encodeURIComponent($("#node-input-device").val()));
             });
+
+            $("#node-input-trigger").typedInput({
+                type: "trigger", types: [{
+                    value: "trigger",
+                    multiple: true,
+                    default: ["onOff", "brightness", "color"],
+                    options: [
+                        { value: "onOff", label: "Power" },
+                        { value: "brightness", label: "Brightness" },
+                        { value: "color", label: "Color" },
+                    ]
+                }]
+            });
         }
     });
 </script>
 
-<script type="text/html" data-template-name="Fade Color">
-    <div class="form-row" style="width: inherit;">
+<script type="text/html" data-template-name="Device Changed">
+    <div class="form-row">
         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
@@ -96,35 +97,36 @@
         </select>
         <button id="node-button-identify" class="ui-button" title="This will flash red, green and blue individually.">Identify</button>
     </div>
-    <div class="form-row" style="width: min-content;">
-        <label for="node-input-time"><i class="icon-tag"></i> Time</label>
-        <input type="number" id="node-input-time"><br/>
-        <label for="node-input-color"><i class="icon-tag"></i> Color</label>
-        <input type="color" id="node-input-color"><br/>
-        <label for="node-input-brightness"><i class="icon-tag"></i> Brightness</label>
-        <input type="number" id="node-input-brightness"><br/>
-        <span style="display: block; padding-left: 106px; color: gray; font-size: small;">
-            If one of the inputs are empty, JSON input is used for that property (if&nbsp;available) from <code>msg.payload</code>.<br>
-            This means you can (for example) use the color property from the selecter here, and then use the brightness value from the <code>msg.payload</code>
-        </span>
-
-<h2>JSON input examples:</h2>
-<pre style="white-space: revert;">{
-  <span class="mtk20">"time":</span> <span class="mtk7">2000</span>,
-  <span class="mtk20">"color":</span> {
-    <span class="mtk8">// This area is the same as the input for the "Set Color" node,</span>
-    <span class="mtk8">// Refer to that if you want to see the other color methods.</span>
-    <span class="mtk20">"hex":</span> <span class="mtk5">"#FFA0E4"</span>
-  },
-  <span class="mtk20">"brightness":</span> <span class="mtk7">50</span>
-}</pre>
+    <div class="form-row" style="width: inherit;">
+        <label for="node-input-trigger"><i class="icon-tag"></i> Trigger on change of:</label>
+        <input type="text" id="node-input-trigger">
     </div>
     <div class="form-row" style="width: inherit;">
-        <br>
-        <h2 style="white-space: nowrap;">WARNING: Fading is buggy</h2>
-        <p>
-            It might not mix well with normal "Set Color" nodes.<br>
-            If you want it to be better, tell Govee that you shouldn't have to send 2 of the same commands to update a status
-        </p>
+        <p>Here is an example response you can expect:</p>
+<pre>{
+    <span class="mtk20">"payload":</span> {
+        <span class="mtk20">"ip":</span> <span class="mtk5">"192.168.178.70"</span>,
+        <span class="mtk20">"id":</span> <span class="mtk5">"6C:25:D4:AD:FC:1A:D0:4D"</span>,
+        <span class="mtk20">"model":</span> <span class="mtk5">"H610A"</span>,
+        <span class="mtk20">"state":</span> {
+            <span class="mtk20">"isOn":</span> <span class="mtk7">1</span>,
+            <span class="mtk20">"brightness":</span> <span class="mtk7">100</span>,
+            <span class="mtk20">"color":</span> {
+                <span class="mtk20">"r":</span> <span class="mtk7">255</span>,
+                <span class="mtk20">"g":</span> <span class="mtk7">108</span>,
+                <span class="mtk20">"b":</span> <span class="mtk7">0</span>
+            },
+            <span class="mtk20">"colorKelvin":</span> <span class="mtk7">1500</span>,
+            <span class="mtk20">"hasReceivedUpdates":</span> <span class="mtk5">true</span>
+        },
+        <span class="mtk20">"versions":</span> {
+            <span class="mtk20">"BLEhardware":</span> <span class="mtk5">"3.01.01"</span>,
+            <span class="mtk20">"BLEsoftware":</span> <span class="mtk5">"1.03.01"</span>,
+            <span class="mtk20">"WiFiHardware":</span> <span class="mtk5">"1.00.10"</span>,
+            <span class="mtk20">"WiFiSoftware":</span> <span class="mtk5">"1.02.03"</span>
+        }
+    },
+    <span class="mtk20">"topic":</span> <span class="mtk5">"GoveeDeviceChange"</span>
+}</pre>
     </div>
 </script>

@@ -1,4 +1,4 @@
-import Govee, { colorOptions, DataResponseStatus, Device, fadeOptions } from "..";
+import Govee, { colorOptions, DataResponseStatus, Device, fadeOptions, stateChangedOptions } from "..";
 import { hex, hsl, rgb } from "color-convert";
 import * as ct from 'color-temperature';
 
@@ -143,7 +143,7 @@ export function setColor (this: Device, options: colorOptions): Promise<void>
         //! Commands have to be send twice te be caught by devstatus... annoying
         // device.socket?.send(message, 0, message.length, 4001, device.ip, () =>
         // {
-            device.socket?.send(message, 0, message.length, 4001, device.ip, () =>
+            device.socket?.send(message, 0, message.length, 4003, device.ip, async () =>
             {
                 if (rgb)
                 {
@@ -155,7 +155,10 @@ export function setColor (this: Device, options: colorOptions): Promise<void>
                     device.state.color = { r: rgbColor.red, g: rgbColor.green, b: rgbColor.blue };
                     device.state.colorKelvin = kelvin;
                 }
+                device.emit("updatedStatus", device.state, ["color"])
                 resolve();
+                // await sleep(100)
+                // updateValues(device, false)
             });
         // });
     });
@@ -178,10 +181,13 @@ export function setBrightness (this: Device, brightness: number | string): Promi
         );
         //! Commands have to be send twice te be caught by devstatus... annoying
         // this.socket?.send(message, 0, message.length, 4001, this.ip, ()=>{
-            this.socket?.send(message, 0, message.length, 4001, this.ip, () =>
+            this.socket?.send(message, 0, message.length, 4003, this.ip, async () =>
             {
                 this.state.brightness = bright;
                 resolve();
+                await sleep(100)
+                this.emit("updatedStatus", this.state, ["brightness"])
+                // updateValues(this, false)
             });
         // });
     });
@@ -262,6 +268,14 @@ export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): 
 
             await sleep(50);
             await device.updateValues();
+            var updatedValues: stateChangedOptions = []
+            if (curBrightness !== targetBright) {
+                updatedValues.push("brightness")
+            }
+            if (changeColor) {
+                updatedValues.push("color")
+            }
+            device.emit("updatedStatus", device.state, updatedValues)
             resolve();
         }, options.time - 100);
         while (running == true)
@@ -315,7 +329,7 @@ export function updateValues (device?: Device, updateAll?: boolean)
         );
         if (!updateAll)
         {
-            device.socket.send(message, 0, message.length, 4001, device.ip);
+            device.socket.send(message, 0, message.length, 4003, device.ip);
             resolve();
         } else
         {

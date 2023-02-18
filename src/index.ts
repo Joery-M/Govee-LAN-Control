@@ -5,6 +5,14 @@ import getSocket from './commands/createSocket';
 import { EventEmitter } from 'events';
 import * as ct from 'color-temperature';
 
+export interface DeviceState {
+    isOn: number,
+    brightness: number,
+    color: { "r": number, "g": number, "b": number },
+    colorKelvin: number,
+    hasReceivedUpdates: boolean
+}
+
 export class Device extends EventEmitter
 {
     constructor(data: Record<string, any>, GoveeInstance: Govee, socket: Socket)
@@ -34,7 +42,12 @@ export class Device extends EventEmitter
         this.updateTimer = setInterval(() =>
         {
             this.updateValues();
-        }, 60000);
+        }, 6000);
+
+        // When the status gets changes, emit it on the main class aswell
+        this.on("updatedStatus", (data, stateChanged) => {
+            GoveeInstance.emit("updatedStatus", this, data, stateChanged)
+        })
     }
     readonly ip: string;
     readonly deviceID: string;
@@ -46,15 +59,9 @@ export class Device extends EventEmitter
         WiFiHardware: string;
         WiFiSoftware: string;
     };
-    public state!: {
-        isOn: number;
-        brightness: number;
-        color: Record<string, number>;
-        colorKelvin: number;
-        hasReceivedUpdates: boolean;
-    };
+    public state: DeviceState;
     readonly actions = new actions(this);
-    readonly updateValues: Function = () => updateValues(this);
+    readonly updateValues = async () => await updateValues(this);
     private updateTimer: NodeJS.Timer;
     public destroy = () =>
     {
@@ -117,12 +124,12 @@ class GoveeConfig
      * Automatically start searching for devices when the UDP socket is made.
      * @default true
      */
-    startDiscover: boolean = true;
+    startDiscover?: boolean = true;
     /**
      * The interval (in ms) at which new devices will be scanned for.
-     * @default 300000 (5 minutes)
+     * @default 60000 (1 minute)
      */
-    discoverInterval: number = 300000;
+    discoverInterval?: number = 60000;
 }
 
 //TODO: I have no idea why i have to define the variables outside the class. But when theyre inside the class, they're always undefined outside of the constructor.
@@ -132,41 +139,76 @@ var udpSocket: Socket;
 
 class Govee extends EventEmitter
 {
+    private config?: GoveeConfig;
+    private isReady = false;
     constructor(config?: GoveeConfig)
     {
         super();
         eventEmitter = this;
+        this.config = config;
 
-        getSocket().then((socket) =>
+        this.getSocket().then(() =>
         {
-            udpSocket = socket;
-
-            udpSocket.on("message", this.receiveMessage);
-
-            //? Now that we have a socket, we can scan (again)
-            //TODO: Creating the socket and scanning can probably combined into 1, but i don't want to risk it, seeing as i have 1 govee device
-            if (!config || config.startDiscover)
-            {
-                this.discover();
-            }
-
             this.emit("ready");
+            this.isReady = true;
         });
 
-        var discoverInterval = 300_000;
+        var discoverInterval = 60_000;
 
         if (config && config.discoverInterval)
         {
             discoverInterval = config.discoverInterval;
         }
 
-        this.discoverInterval = setInterval(() =>
+        this.once("ready", () =>
         {
-            this.discover();
-        }, discoverInterval);
+            this.discoverInterval = setInterval(() =>
+            {
+                this.discover();
+            }, discoverInterval);
+        });
     }
 
     private discoverInterval: NodeJS.Timer;
+
+    private getSocket = (): Promise<void> =>
+    {
+        return new Promise<void>((resolve, reject) =>
+        {
+            getSocket().then(async (socket) =>
+            {
+                if (!socket)
+                {
+                    console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
+                    var whileSocket = undefined
+                    while (whileSocket == undefined) {
+                        whileSocket = await getSocket()
+                        if (whileSocket == undefined) {
+                            console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
+                        }
+                    }
+                    udpSocket = whileSocket
+                }else {
+                    udpSocket = socket
+                }
+
+                udpSocket.on("message", this.receiveMessage);
+
+                //? Now that we have a socket, we can scan (again)
+                //TODO: Creating the socket and scanning can probably combined into 1, but i don't want to risk it, seeing as i have 1 govee device
+                if (!this.config || this.config.startDiscover)
+                {
+                    this.discover();
+                }
+                if (!this.isReady)
+                {
+                    this.emit("ready");
+                    this.isReady = true;
+                }
+                resolve();
+            });
+        });
+    };
 
 
     /**
@@ -175,8 +217,13 @@ class Govee extends EventEmitter
      * 
      * Note that you typically don't have to run this command yourself. 
      */
-    public discover ()
+    public discover = () =>
     {
+        if (!udpSocket)
+        {
+            console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
+            return;
+        }
         let message = JSON.stringify(
             {
                 "msg": {
@@ -188,9 +235,24 @@ class Govee extends EventEmitter
             }
         );
         udpSocket.send(message, 0, message.length, 4001, "239.255.255.250");
-    }
+        deviceList.forEach((dev) =>
+        {
+            udpSocket.send(message, 0, message.length, 4003, dev.ip);
+            this.discoverTimes[dev.ip] ||= 0;
+            this.discoverTimes[dev.ip]++;
 
-    private async receiveMessage (msg: Buffer, rinfo: RemoteInfo)
+            if (this.discoverTimes[dev.ip] >= 5)
+            {
+                eventEmitter.emit("deviceRemoved", dev);
+                dev.destroy();
+                deviceList.delete(dev.ip);
+            }
+        });
+    };
+
+    private discoverTimes: Map<string, number> = new Map();
+
+    private receiveMessage = async (msg: Buffer, rinfo: RemoteInfo) =>
     {
         var msgRes: messageResponse = JSON.parse(msg.toString());
         if (!udpSocket)
@@ -201,12 +263,13 @@ class Govee extends EventEmitter
         switch (msgRes.msg.cmd)
         {
             case "scan":
-                var oldList = deviceList;
+                var oldList = Array.from(deviceList.values());
                 if (!deviceList.has(data.ip))
                 {
                     var device = new Device(data, this, udpSocket);
                     device.updateValues();
                 }
+                this.discoverTimes[data.ip] = 0;
                 oldList.forEach((device) =>
                 {
                     if (!deviceList.has(device.ip))
@@ -258,28 +321,39 @@ class Govee extends EventEmitter
                 {
                     stateChanged.push("onOff");
                 }
-                device.emit("updatedStatus", data as DataResponseStatus, stateChanged as stateChangedOptions);
-                eventEmitter.emit("updatedStatus", device, data, stateChanged);
+                device.emit("updatedStatus", device.state, stateChanged as stateChangedOptions);
+                // eventEmitter.emit("updatedStatus", device, device.state, stateChanged);
                 break;
 
             default:
                 break;
         }
-    }
+    };
 
 
+    /**
+     * A map of devices where the devices' IP is the key, and the Device object is the value.
+     */
     public get devicesMap (): Map<string, Device>
     {
         return deviceList;
     }
+    /**
+     * An array of all devices.
+     */
     public get devicesArray (): Device[]
     {
         return Array.from(deviceList.values());
     }
 
-    public updateAllDevices ()
+    /**
+     * Retrieve the values of all devices.
+     */
+    public async updateAllDevices ()
     {
-        updateValues(this.devicesArray[0], true);
+        const updatePromises = this.devicesArray.map((device) => device.updateValues);
+        await Promise.all(updatePromises);
+        return;
     }
 
     public destroy ()
@@ -362,7 +436,7 @@ export type colorOptions = colorOptionsHex | colorOptionsRGB | colorOptionsHSL |
 
 type DeviceEventTypes =
     {
-        updatedStatus: (data: DataResponseStatus, stateChanged: stateChangedOptions) => void;
+        updatedStatus: (data: DeviceState, stateChanged: stateChangedOptions) => void;
         destroyed: () => void;
     };
 
@@ -393,7 +467,7 @@ type GoveeEventTypes = {
     ready: () => void;
     deviceAdded: (device: Device) => void;
     deviceRemoved: (device: Device) => void;
-    updatedStatus: (device: Device, data: DataResponseStatus, stateChanged: stateChangedOptions) => void;
+    updatedStatus: (device: Device, data: DeviceState, stateChanged: stateChangedOptions) => void;
 };
 
 interface Govee

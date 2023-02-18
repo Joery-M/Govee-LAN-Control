@@ -15,10 +15,10 @@ export function setOff (this: Device): Promise<void>
                 }
             }
         );
-        device.socket?.send(message, 0, message.length, 4001, device.ip, () =>
+        device.socket?.send(message, 0, message.length, 4003, device.ip, async () =>
         {
-            device.updateValues();
             device.state.isOn = 0;
+            device.emit("updatedStatus", device.state, ["onOff"])
             resolve();
         });
     });
@@ -43,10 +43,10 @@ export function setOn (this: Device): Promise<void>
                 }
             }
         );
-        device.socket?.send(message, 0, message.length, 4001, device.ip, () =>
+        device.socket?.send(message, 0, message.length, 4003, device.ip, () =>
         {
-            device.updateValues();
             device.state.isOn = 1;
+            device.emit("updatedStatus", device.state, ["onOff"])
             resolve();
         });
     });

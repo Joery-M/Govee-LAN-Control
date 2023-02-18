@@ -1,5 +1,5 @@
 <script type="text/javascript">
-    RED.nodes.registerType('Device Added', {
+    RED.nodes.registerType('Device Removed', {
         category: 'Govee',
         color: '#00a8e2',
         defaults: {
@@ -10,12 +10,12 @@
         icon: "Govee.svg",
         label: function ()
         {
-            return this.name || "Device Added";
+            return this.name || "Device Removed";
         }
     });
 </script>
 
-<script type="text/html" data-template-name="Device Added">
+<script type="text/html" data-template-name="Device Removed">
     <div class="form-row">
         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">

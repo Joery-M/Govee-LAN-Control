@@ -83,7 +83,7 @@ function setColor(options) {
         }
       );
     }
-    device.socket?.send(message, 0, message.length, 4001, device.ip, () => {
+    device.socket?.send(message, 0, message.length, 4003, device.ip, async () => {
       if (rgb2) {
         device.state.color = rgb2;
         device.state.colorKelvin = ct.rgb2colorTemperature({ red: rgb2.r, green: rgb2.g, blue: rgb2.b });
@@ -92,6 +92,7 @@ function setColor(options) {
         device.state.color = { r: rgbColor.red, g: rgbColor.green, b: rgbColor.blue };
         device.state.colorKelvin = kelvin;
       }
+      device.emit("updatedStatus", device.state, ["color"]);
       resolve();
     });
   });
@@ -109,9 +110,11 @@ function setBrightness(brightness) {
         }
       }
     );
-    this.socket?.send(message, 0, message.length, 4001, this.ip, () => {
+    this.socket?.send(message, 0, message.length, 4003, this.ip, async () => {
       this.state.brightness = bright;
       resolve();
+      await sleep(100);
+      this.emit("updatedStatus", this.state, ["brightness"]);
     });
   });
 }
@@ -166,6 +169,14 @@ function fade(eventEmitter2, options) {
       }
       await sleep(50);
       await device.updateValues();
+      var updatedValues = [];
+      if (curBrightness !== targetBright) {
+        updatedValues.push("brightness");
+      }
+      if (changeColor) {
+        updatedValues.push("color");
+      }
+      device.emit("updatedStatus", device.state, updatedValues);
       resolve();
     }, options.time - 100);
     while (running == true) {
@@ -202,7 +213,7 @@ function updateValues(device, updateAll) {
       }
     );
     if (!updateAll) {
-      device.socket.send(message, 0, message.length, 4001, device.ip);
+      device.socket.send(message, 0, message.length, 4003, device.ip);
       resolve();
     } else {
       device.socket.send(message, 0, message.length, 4001, "239.255.255.250");
@@ -225,9 +236,9 @@ function setOff() {
         }
       }
     );
-    device.socket?.send(message, 0, message.length, 4001, device.ip, () => {
-      device.updateValues();
+    device.socket?.send(message, 0, message.length, 4003, device.ip, async () => {
       device.state.isOn = 0;
+      device.emit("updatedStatus", device.state, ["onOff"]);
       resolve();
     });
   });
@@ -245,9 +256,9 @@ function setOn() {
         }
       }
     );
-    device.socket?.send(message, 0, message.length, 4001, device.ip, () => {
-      device.updateValues();
+    device.socket?.send(message, 0, message.length, 4003, device.ip, () => {
       device.state.isOn = 1;
+      device.emit("updatedStatus", device.state, ["onOff"]);
       resolve();
     });
   });
@@ -259,8 +270,10 @@ import { networkInterfaces } from "os";
 var address = "239.255.255.250";
 var port = 4002;
 var createSocket_default = () => {
-  return new Promise((resolve, _reject) => {
+  return new Promise((resolve, reject) => {
     const nets = networkInterfaces();
+    var sockets = [];
+    var isResolved = false;
     for (const name of Object.keys(nets)) {
       nets[name]?.forEach((net) => {
         const familyV4Value = typeof net.family === "string" ? "IPv4" : 4;
@@ -269,8 +282,10 @@ var createSocket_default = () => {
             type: "udp4",
             reuseAddr: true
           });
+          sockets.push(socket);
           socket.once("message", (msg, remote) => {
             resolve(socket);
+            isResolved = true;
           });
           socket.bind(port, net.address);
           socket.on("listening", function() {
@@ -292,6 +307,14 @@ var createSocket_default = () => {
         }
       });
     }
+    setTimeout(() => {
+      if (isResolved == false) {
+        sockets.forEach((socket) => {
+          socket.close();
+        });
+        resolve(void 0);
+      }
+    }, 5e3);
   });
 };
 
@@ -321,7 +344,10 @@ var Device = class extends EventEmitter {
     this.socket = socket;
     this.updateTimer = setInterval(() => {
       this.updateValues();
-    }, 6e4);
+    }, 6e3);
+    this.on("updatedStatus", (data2, stateChanged) => {
+      GoveeInstance.emit("updatedStatus", this, data2, stateChanged);
+    });
   }
   ip;
   deviceID;
@@ -330,7 +356,7 @@ var Device = class extends EventEmitter {
   versions;
   state;
   actions = new actions(this);
-  updateValues = () => updateValues(this);
+  updateValues = async () => await updateValues(this);
   updateTimer;
   destroy = () => {
     this.emit("destroyed");
@@ -352,27 +378,60 @@ var deviceList = /* @__PURE__ */ new Map();
 var eventEmitter;
 var udpSocket;
 var Govee = class extends EventEmitter {
+  config;
+  isReady = false;
   constructor(config) {
     super();
     eventEmitter = this;
-    createSocket_default().then((socket) => {
-      udpSocket = socket;
-      udpSocket.on("message", this.receiveMessage);
-      if (!config || config.startDiscover) {
-        this.discover();
-      }
+    this.config = config;
+    this.getSocket().then(() => {
       this.emit("ready");
+      this.isReady = true;
     });
-    var discoverInterval = 3e5;
+    var discoverInterval = 6e4;
     if (config && config.discoverInterval) {
       discoverInterval = config.discoverInterval;
     }
-    this.discoverInterval = setInterval(() => {
-      this.discover();
-    }, discoverInterval);
+    this.once("ready", () => {
+      this.discoverInterval = setInterval(() => {
+        this.discover();
+      }, discoverInterval);
+    });
   }
   discoverInterval;
-  discover() {
+  getSocket = () => {
+    return new Promise((resolve, reject) => {
+      createSocket_default().then(async (socket) => {
+        if (!socket) {
+          console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
+          var whileSocket = void 0;
+          while (whileSocket == void 0) {
+            whileSocket = await createSocket_default();
+            if (whileSocket == void 0) {
+              console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
+            }
+          }
+          udpSocket = whileSocket;
+        } else {
+          udpSocket = socket;
+        }
+        udpSocket.on("message", this.receiveMessage);
+        if (!this.config || this.config.startDiscover) {
+          this.discover();
+        }
+        if (!this.isReady) {
+          this.emit("ready");
+          this.isReady = true;
+        }
+        resolve();
+      });
+    });
+  };
+  discover = () => {
+    if (!udpSocket) {
+      console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
+      return;
+    }
     let message = JSON.stringify(
       {
         "msg": {
@@ -384,8 +443,19 @@ var Govee = class extends EventEmitter {
       }
     );
     udpSocket.send(message, 0, message.length, 4001, "239.255.255.250");
-  }
-  async receiveMessage(msg, rinfo) {
+    deviceList.forEach((dev) => {
+      udpSocket.send(message, 0, message.length, 4003, dev.ip);
+      this.discoverTimes[dev.ip] ||= 0;
+      this.discoverTimes[dev.ip]++;
+      if (this.discoverTimes[dev.ip] >= 5) {
+        eventEmitter.emit("deviceRemoved", dev);
+        dev.destroy();
+        deviceList.delete(dev.ip);
+      }
+    });
+  };
+  discoverTimes = /* @__PURE__ */ new Map();
+  receiveMessage = async (msg, rinfo) => {
     var msgRes = JSON.parse(msg.toString());
     if (!udpSocket) {
       return;
@@ -393,11 +463,12 @@ var Govee = class extends EventEmitter {
     var data = msgRes.msg.data;
     switch (msgRes.msg.cmd) {
       case "scan":
-        var oldList = deviceList;
+        var oldList = Array.from(deviceList.values());
         if (!deviceList.has(data.ip)) {
           var device = new Device(data, this, udpSocket);
           device.updateValues();
         }
+        this.discoverTimes[data.ip] = 0;
         oldList.forEach((device2) => {
           if (!deviceList.has(device2.ip)) {
             eventEmitter.emit("deviceRemoved", device2);
@@ -434,21 +505,22 @@ var Govee = class extends EventEmitter {
         if (onOffChanged) {
           stateChanged.push("onOff");
         }
-        device.emit("updatedStatus", data, stateChanged);
-        eventEmitter.emit("updatedStatus", device, data, stateChanged);
+        device.emit("updatedStatus", device.state, stateChanged);
         break;
       default:
         break;
     }
-  }
+  };
   get devicesMap() {
     return deviceList;
   }
   get devicesArray() {
     return Array.from(deviceList.values());
   }
-  updateAllDevices() {
-    updateValues(this.devicesArray[0], true);
+  async updateAllDevices() {
+    const updatePromises = this.devicesArray.map((device) => device.updateValues);
+    await Promise.all(updatePromises);
+    return;
   }
   destroy() {
     eventEmitter.removeAllListeners();
