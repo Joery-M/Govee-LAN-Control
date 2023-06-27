@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.1] - 2023-06-27
+
+### Added
+- A way for fades to be cancelled when another fade starts
+
+### Fixed
+- Node-RED in HomeAssistant not fetching devices for dropdown menu.
+
 ## [3.0.0] - 2023-02-18
 
 ### Added

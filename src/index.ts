@@ -5,12 +5,13 @@ import getSocket from './commands/createSocket';
 import { EventEmitter } from 'events';
 import * as ct from 'color-temperature';
 
-export interface DeviceState {
+export interface DeviceState
+{
     isOn: number,
     brightness: number,
-    color: { "r": number, "g": number, "b": number },
+    color: { "r": number, "g": number, "b": number; },
     colorKelvin: number,
-    hasReceivedUpdates: boolean
+    hasReceivedUpdates: boolean;
 }
 
 export class Device extends EventEmitter
@@ -45,14 +46,18 @@ export class Device extends EventEmitter
         }, 6000);
 
         // When the status gets changes, emit it on the main class aswell
-        this.on("updatedStatus", (data, stateChanged) => {
-            GoveeInstance.emit("updatedStatus", this, data, stateChanged)
-        })
+        this.on("updatedStatus", (data, stateChanged) =>
+        {
+            GoveeInstance.emit("updatedStatus", this, data, stateChanged);
+        });
+
+        this.goveeInstance = GoveeInstance;
     }
     readonly ip: string;
     readonly deviceID: string;
     readonly model: string;
     readonly socket: Socket;
+    readonly goveeInstance: Govee;
     readonly versions: {
         BLEhardware: string;
         BLEsoftware: string;
@@ -103,7 +108,19 @@ class actions
         });
      * ```
      */
-    fadeColor = (options: fadeOptions): Promise<void> => fade.call(this.device, eventEmitter, options);
+    fadeColor = (options: fadeOptions): Promise<void> =>
+    {
+        this.cancelFade();
+
+        return fade.call(this.device, eventEmitter, options);
+    };
+
+    /**
+     * @description Cancels the current fade action
+     * 
+     * @param rejectPromises Reject active fade promise
+     */
+    cancelFade = (rejectPromises: boolean = false) => this.device.emit("fadeCancel", rejectPromises);
 
     /**
      * @description
@@ -132,7 +149,8 @@ class GoveeConfig
     discoverInterval?: number = 60000;
 }
 
-//TODO: I have no idea why i have to define the variables outside the class. But when theyre inside the class, they're always undefined outside of the constructor.
+//  TODO: I have no idea why i have to define the variables outside the class. But when they're inside the class, they're always undefined outside of the constructor.
+//? Edit: I do see it now (anonymous functions), but i haven't changed it yet.
 var deviceList = new Map<string, Device>();
 var eventEmitter: EventEmitter;
 var udpSocket: Socket;
@@ -180,16 +198,19 @@ class Govee extends EventEmitter
                 if (!socket)
                 {
                     console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
-                    var whileSocket = undefined
-                    while (whileSocket == undefined) {
-                        whileSocket = await getSocket()
-                        if (whileSocket == undefined) {
+                    var whileSocket = undefined;
+                    while (whileSocket == undefined)
+                    {
+                        whileSocket = await getSocket();
+                        if (whileSocket == undefined)
+                        {
                             console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
                         }
                     }
-                    udpSocket = whileSocket
-                }else {
-                    udpSocket = socket
+                    udpSocket = whileSocket;
+                } else
+                {
+                    udpSocket = socket;
                 }
 
                 udpSocket.on("message", this.receiveMessage);
@@ -437,6 +458,7 @@ export type colorOptions = colorOptionsHex | colorOptionsRGB | colorOptionsHSL |
 type DeviceEventTypes =
     {
         updatedStatus: (data: DeviceState, stateChanged: stateChangedOptions) => void;
+        fadeCancel: (rejectPromises: boolean) => void;
         destroyed: () => void;
     };
 

@@ -38,7 +38,7 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
     RED.nodes.registerType("Device Added", discoverNode);
 
 
-    RED.httpNode.get("/govee/devices", (req, res) =>
+    RED.httpAdmin.get("/govee/devices", (req, res) =>
     {
         console.log("Govee HTTP: Devices list requested");
         var deviceArray = govee.devicesArray.map((device) =>
@@ -54,7 +54,7 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
     });
 
     var devicesBeingIdentified: string[] = [];
-    RED.httpNode.get("/govee/identifyDevice", async (req, res) =>
+    RED.httpAdmin.get("/govee/identifyDevice", async (req, res) =>
     {
         console.log("Govee HTTP: Device requested to identify");
 

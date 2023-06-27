@@ -248,9 +248,11 @@ export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): 
 
         // Start loop
         var running = true;
-        setTimeout(async () =>
+        
+        var fadeEndTimeout = setTimeout(async () =>
         {
             running = false;
+            this.removeListener("fadeCancel", fadeCancelHandler)
             if (changeColor)
             {
                 setColor.call(device, {
@@ -278,6 +280,20 @@ export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): 
             device.emit("updatedStatus", device.state, updatedValues)
             resolve();
         }, options.time - 100);
+
+        // Respond to fade cancel
+        function fadeCancelHandler(rejectPromise) {
+            running = false
+            clearTimeout(fadeEndTimeout);
+
+            if (rejectPromise) {
+                reject("Fade got cancelled")
+            }else{
+                resolve();
+            }
+        }
+        this.once("fadeCancel", fadeCancelHandler)
+
         while (running == true)
         {
             var startLoopTime = Date.now();

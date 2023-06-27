@@ -23,7 +23,7 @@ module.exports = (RED) => {
     }
   }
   RED.nodes.registerType("Device Added", discoverNode);
-  RED.httpNode.get("/govee/devices", (req, res) => {
+  RED.httpAdmin.get("/govee/devices", (req, res) => {
     console.log("Govee HTTP: Devices list requested");
     var deviceArray = import_globalData.govee.devicesArray.map((device) => {
       var entry = {};
@@ -36,7 +36,7 @@ module.exports = (RED) => {
     res.status(200).send(deviceArray);
   });
   var devicesBeingIdentified = [];
-  RED.httpNode.get("/govee/identifyDevice", async (req, res) => {
+  RED.httpAdmin.get("/govee/identifyDevice", async (req, res) => {
     console.log("Govee HTTP: Device requested to identify");
     var deviceId = new URL(req.url, `http://${req.headers.host}`).searchParams.get("device");
     var device = import_globalData.govee.devicesArray.find((dev) => dev.deviceID == deviceId);

@@ -186,8 +186,9 @@ function fade(eventEmitter2, options) {
       device.actions.setColor({ rgb: [kelvinRGB.red, kelvinRGB.green, kelvinRGB.blue] });
     }
     var running = true;
-    setTimeout(async () => {
+    var fadeEndTimeout = setTimeout(async () => {
       running = false;
+      this.removeListener("fadeCancel", fadeCancelHandler);
       if (changeColor) {
         setColor.call(device, {
           hex: newColor
@@ -211,6 +212,16 @@ function fade(eventEmitter2, options) {
       device.emit("updatedStatus", device.state, updatedValues);
       resolve();
     }, options.time - 100);
+    function fadeCancelHandler(rejectPromise) {
+      running = false;
+      clearTimeout(fadeEndTimeout);
+      if (rejectPromise) {
+        reject("Fade got cancelled");
+      } else {
+        resolve();
+      }
+    }
+    this.once("fadeCancel", fadeCancelHandler);
     while (running == true) {
       var startLoopTime = Date.now();
       var percent = interpolate((Date.now() - startTime) / (options.time - 100), 0, 1, 0, 1, 0.5);
@@ -380,11 +391,13 @@ var Device = class extends import_events.EventEmitter {
     this.on("updatedStatus", (data2, stateChanged) => {
       GoveeInstance.emit("updatedStatus", this, data2, stateChanged);
     });
+    this.goveeInstance = GoveeInstance;
   }
   ip;
   deviceID;
   model;
   socket;
+  goveeInstance;
   versions;
   state;
   actions = new actions(this);
@@ -402,7 +415,11 @@ var actions = class {
   device;
   setColor = (color) => setColor.call(this.device, color);
   setBrightness = (brightness) => setBrightness.call(this.device, brightness);
-  fadeColor = (options) => fade.call(this.device, eventEmitter, options);
+  fadeColor = (options) => {
+    this.cancelFade();
+    return fade.call(this.device, eventEmitter, options);
+  };
+  cancelFade = (rejectPromises = false) => this.device.emit("fadeCancel", rejectPromises);
   setOff = () => setOff.call(this.device);
   setOn = () => setOn.call(this.device);
 };

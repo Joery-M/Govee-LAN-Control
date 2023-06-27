@@ -41,6 +41,12 @@ declare class actions {
      */
     fadeColor: (options: fadeOptions) => Promise<void>;
     /**
+     * @description Cancels the current fade action
+     *
+     * @param rejectPromises Reject active fade promise
+     */
+    cancelFade: (rejectPromises?: boolean) => boolean;
+    /**
      * @description
      * Turn off a device.
      */
@@ -107,6 +113,7 @@ interface colorOptionsKelvin {
 type colorOptions = colorOptionsHex | colorOptionsRGB | colorOptionsHSL | colorOptionsKelvin;
 type DeviceEventTypes = {
     updatedStatus: (data: DeviceState, stateChanged: stateChangedOptions) => void;
+    fadeCancel: (rejectPromises: boolean) => void;
     destroyed: () => void;
 };
 declare class Device extends EventEmitter {
@@ -115,6 +122,7 @@ declare class Device extends EventEmitter {
     readonly deviceID: string;
     readonly model: string;
     readonly socket: Socket;
+    readonly goveeInstance: Govee;
     readonly versions: {
         BLEhardware: string;
         BLEsoftware: string;
