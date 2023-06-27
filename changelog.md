@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.2] - 2023-06-27
+
+### Fixed
+- Applied the same fix als last update to the identify button
+
+### Changed
+- Typings for Node-RED to latest version.
+
+
 ## [3.0.1] - 2023-06-27
 
 ### Added

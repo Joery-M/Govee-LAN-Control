@@ -1,62 +1,62 @@
 {
-    "name": "govee-lan-control",
-    "displayName": "Govee LAN Control",
-    "version": "3.0.1",
-    "description": "A package to control Govee devices using their new LAN control.",
-    "scripts": {
-        "prepublish": "npm run build",
-        "build": "rm -fr dist/* && tsup",
-        "watch": "npm run build -- --watch src",
-        "node-red": "node \"%appdata%/npm/node_modules/node-red/red.js\"",
-        "prepublishOnly": "npm run build"
-    },
-    "main": "./dist/index.js",
-    "module": "./dist/index.mjs",
-    "require": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "exports": {
-        ".": {
-            "require": "./dist/index.js",
-            "import": "./dist/index.mjs",
-            "types": "./dist/index.d.ts"
-        }
-    },
-    "engines": {
-        "node": ">= 7"
-    },
-    "node-red": {
-        "nodes": {
-            "main": "dist/node-red/main.js",
-            "deviceRemoved": "dist/node-red/deviceRemoved.js",
-            "deviceChanged": "dist/node-red/deviceChanged.js",
-            "setColor": "dist/node-red/setColor.js",
-            "setBrightness": "dist/node-red/setBrightness.js",
-            "setPower": "dist/node-red/setPower.js",
-            "fadeColor": "dist/node-red/fadeColor.js"
-        }
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/Joery-M/Govee-LAN-Control.git"
-    },
-    "keywords": [
-        "Govee",
-        "node-red"
-    ],
-    "author": "Joery M",
-    "license": "MIT",
-    "bugs": {
-        "url": "https://github.com/Joery-M/Govee-LAN-Control/issues"
-    },
-    "homepage": "https://joery.com/govee-lan-control/",
-    "dependencies": {
-        "color-convert": "^2.0.1",
-        "color-temperature": "^0.2.7"
-    },
-    "devDependencies": {
-        "@types/color-convert": "^2.0.0",
-        "@types/node-red": "^1.2.1",
-        "tsup": "^6.5.0",
-        "typescript": "^4.9.3"
+  "name": "govee-lan-control",
+  "displayName": "Govee LAN Control",
+  "version": "3.0.2",
+  "description": "A package to control Govee devices using their new LAN control.",
+  "scripts": {
+    "prepublish": "npm run build",
+    "build": "rm -fr dist/* && tsup",
+    "watch": "npm run build -- --watch src",
+    "node-red": "node \"%appdata%/npm/node_modules/node-red/red.js\"",
+    "prepublishOnly": "npm run build"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "require": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts"
     }
+  },
+  "engines": {
+    "node": ">= 7"
+  },
+  "node-red": {
+    "nodes": {
+      "main": "dist/node-red/main.js",
+      "deviceRemoved": "dist/node-red/deviceRemoved.js",
+      "deviceChanged": "dist/node-red/deviceChanged.js",
+      "setColor": "dist/node-red/setColor.js",
+      "setBrightness": "dist/node-red/setBrightness.js",
+      "setPower": "dist/node-red/setPower.js",
+      "fadeColor": "dist/node-red/fadeColor.js"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Joery-M/Govee-LAN-Control.git"
+  },
+  "keywords": [
+    "Govee",
+    "node-red"
+  ],
+  "author": "Joery M",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Joery-M/Govee-LAN-Control/issues"
+  },
+  "homepage": "https://joery.com/govee-lan-control/",
+  "dependencies": {
+    "color-convert": "^2.0.1",
+    "color-temperature": "^0.2.7"
+  },
+  "devDependencies": {
+    "@types/color-convert": "^2.0.0",
+    "@types/node-red": "^1.3.1",
+    "tsup": "^6.5.0",
+    "typescript": "^4.9.3"
+  }
 }
