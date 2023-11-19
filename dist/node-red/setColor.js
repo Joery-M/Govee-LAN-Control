@@ -25,7 +25,7 @@ module.exports = (RED) => {
         import_globalData.govee.devicesArray.forEach((arrayDevice) => {
           setDeviceColor(arrayDevice, newColor);
         });
-      } else {
+      } else if (device) {
         setDeviceColor(device, newColor);
       }
       function setDeviceColor(device2, newColor2) {

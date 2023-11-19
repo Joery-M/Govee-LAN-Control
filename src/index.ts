@@ -1,7 +1,7 @@
-import { RemoteInfo, Socket, createSocket } from 'dgram';
+import { RemoteInfo, Socket } from 'dgram';
 import { fade, setBrightness, setColor, updateValues } from './commands/setColors';
 import { setOff, setOn } from './commands/setOnOff';
-import getSocket from './commands/createSocket';
+import { getGoveeDeviceSocket } from './commands/createSocket';
 import { EventEmitter } from 'events';
 import * as ct from 'color-temperature';
 
@@ -94,7 +94,7 @@ class actions
      * @description
      * #### Fade the color and brightness of your device.
      * **Warning**: This works by sending many many commands (At least every 10ms).
-     * 
+     *
      * Before the code gets run for sending values, the state of the device gets updated.
      * ***
      * Usage:
@@ -112,12 +112,12 @@ class actions
     {
         this.cancelFade();
 
-        return fade.call(this.device, eventEmitter, options);
+        return fade.bind(this.device)(options)
     };
 
     /**
      * @description Cancels the current fade action
-     * 
+     *
      * @param rejectPromises Reject active fade promise
      */
     cancelFade = (rejectPromises: boolean = false) => this.device.emit("fadeCancel", rejectPromises);
@@ -152,8 +152,7 @@ class GoveeConfig
 //  TODO: I have no idea why i have to define the variables outside the class. But when they're inside the class, they're always undefined outside of the constructor.
 //? Edit: I do see it now (anonymous functions), but i haven't changed it yet.
 var deviceList = new Map<string, Device>();
-var eventEmitter: EventEmitter;
-var udpSocket: Socket;
+let udpSocket: Socket | undefined;
 
 class Govee extends EventEmitter
 {
@@ -162,7 +161,6 @@ class Govee extends EventEmitter
     constructor(config?: GoveeConfig)
     {
         super();
-        eventEmitter = this;
         this.config = config;
 
         this.getSocket().then(() =>
@@ -171,7 +169,7 @@ class Govee extends EventEmitter
             this.isReady = true;
         });
 
-        var discoverInterval = 60_000;
+        let discoverInterval = 60_000;
 
         if (config && config.discoverInterval)
         {
@@ -187,21 +185,20 @@ class Govee extends EventEmitter
         });
     }
 
-    private discoverInterval: NodeJS.Timer;
+    private discoverInterval: NodeJS.Timer | null = null;
 
-    private getSocket = (): Promise<void> =>
-    {
-        return new Promise<void>((resolve, reject) =>
+    private getSocket(): Promise<void> {
+        return new Promise<void>((resolve, _reject) =>
         {
-            getSocket().then(async (socket) =>
+            getGoveeDeviceSocket().then(async (socket?: Socket) =>
             {
                 if (!socket)
                 {
                     console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
-                    var whileSocket = undefined;
+                    let whileSocket = undefined;
                     while (whileSocket == undefined)
                     {
-                        whileSocket = await getSocket();
+                        whileSocket = await this.getSocket();
                         if (whileSocket == undefined)
                         {
                             console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
@@ -213,7 +210,7 @@ class Govee extends EventEmitter
                     udpSocket = socket;
                 }
 
-                udpSocket.on("message", this.receiveMessage);
+                udpSocket.on("message", this.receiveMessage.bind(this));
 
                 //? Now that we have a socket, we can scan (again)
                 //TODO: Creating the socket and scanning can probably combined into 1, but i don't want to risk it, seeing as i have 1 govee device
@@ -235,11 +232,10 @@ class Govee extends EventEmitter
     /**
      * @description
      * Use this function to re-send the command to scan for devices.
-     * 
-     * Note that you typically don't have to run this command yourself. 
+     *
+     * Note that you typically don't have to run this command yourself.
      */
-    public discover = () =>
-    {
+    public discover() {
         if (!udpSocket)
         {
             console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
@@ -258,13 +254,14 @@ class Govee extends EventEmitter
         udpSocket.send(message, 0, message.length, 4001, "239.255.255.250");
         deviceList.forEach((dev) =>
         {
+            if(!udpSocket) return;
             udpSocket.send(message, 0, message.length, 4003, dev.ip);
-            this.discoverTimes[dev.ip] ||= 0;
-            this.discoverTimes[dev.ip]++;
+            const oldCount = this.discoverTimes.get(dev.ip) ?? 0;
+            this.discoverTimes.set(dev.ip, oldCount + 1);
 
-            if (this.discoverTimes[dev.ip] >= 5)
+            if (oldCount >= 4)
             {
-                eventEmitter.emit("deviceRemoved", dev);
+                this.emit("deviceRemoved", dev);
                 dev.destroy();
                 deviceList.delete(dev.ip);
             }
@@ -273,77 +270,21 @@ class Govee extends EventEmitter
 
     private discoverTimes: Map<string, number> = new Map();
 
-    private receiveMessage = async (msg: Buffer, rinfo: RemoteInfo) =>
-    {
-        var msgRes: messageResponse = JSON.parse(msg.toString());
+    private async receiveMessage(msg: Buffer, rinfo: RemoteInfo) {
+        const msgRes: messageResponse = JSON.parse(msg.toString());
         if (!udpSocket)
         {
             return;
         }
-        var data = msgRes.msg.data;
+        const data = msgRes.msg.data;
         switch (msgRes.msg.cmd)
         {
             case "scan":
-                var oldList = Array.from(deviceList.values());
-                if (!deviceList.has(data.ip))
-                {
-                    var device = new Device(data, this, udpSocket);
-                    device.updateValues();
-                }
-                this.discoverTimes[data.ip] = 0;
-                oldList.forEach((device) =>
-                {
-                    if (!deviceList.has(device.ip))
-                    {
-                        eventEmitter.emit("deviceRemoved", device);
-                        device.destroy();
-                        deviceList.delete(device.ip);
-                    }
-                });
+                this.onScanMessage(data);
                 break;
 
             case "devStatus":
-                var device = deviceList.get(rinfo.address);
-
-                var oldState = JSON.parse(JSON.stringify(device.state));
-                device.state.brightness = data.brightness;
-                device.state.isOn = data.onOff;
-                device.state.color = data.color;
-
-                if (!data.color.colorTemInKelvin)
-                {
-                    device.state.colorKelvin = ct.rgb2colorTemperature({ red: data.color.r, green: data.color.g, blue: data.color.b });
-                } else
-                {
-                    device.state.colorKelvin = data.color.colorTemInKelvin;
-                }
-
-                var stateChanged: stateChangedOptions = [];
-                var colorChanged = oldState.color.r !== data.color.r || oldState.color.g !== data.color.g || oldState.color.b !== data.color.b;
-                var brightnessChanged = oldState.brightness !== data.brightness;
-                var onOffChanged = oldState.isOn !== data.onOff;
-
-                //* This may seem like a weird way of doing things, but i want to first get the full state of the device, then i can say it has been added
-                if (!device.state.hasReceivedUpdates)
-                {
-                    device.state.hasReceivedUpdates = true;
-                    eventEmitter.emit("deviceAdded", device);
-                }
-
-                if (brightnessChanged)
-                {
-                    stateChanged.push("brightness");
-                }
-                if (colorChanged)
-                {
-                    stateChanged.push("color");
-                }
-                if (onOffChanged)
-                {
-                    stateChanged.push("onOff");
-                }
-                device.emit("updatedStatus", device.state, stateChanged as stateChangedOptions);
-                // eventEmitter.emit("updatedStatus", device, device.state, stateChanged);
+                this.onDevStatusMessage(rinfo, data);
                 break;
 
             default:
@@ -351,6 +292,64 @@ class Govee extends EventEmitter
         }
     };
 
+
+    private onDevStatusMessage(rinfo: RemoteInfo, data: Record<string, any>): void {
+        const device = deviceList.get(rinfo.address);
+        if (!device) {
+            return;
+        }
+
+        const oldState = JSON.parse(JSON.stringify(device.state));
+        device.state.brightness = data.brightness;
+        device.state.isOn = data.onOff;
+        device.state.color = data.color;
+
+        if (!data.color.colorTemInKelvin) {
+            device.state.colorKelvin = ct.rgb2colorTemperature({red: data.color.r, green: data.color.g, blue: data.color.b});
+        } else {
+            device.state.colorKelvin = data.color.colorTemInKelvin;
+        }
+
+        const stateChanged: stateChangedOptions = [];
+        const colorChanged = oldState.color.r !== data.color.r || oldState.color.g !== data.color.g || oldState.color.b !== data.color.b;
+        const brightnessChanged = oldState.brightness !== data.brightness;
+        const onOffChanged = oldState.isOn !== data.onOff;
+
+        //* This may seem like a weird way of doing things, but i want to first get the full state of the device, then i can say it has been added
+        if (!device.state.hasReceivedUpdates) {
+            device.state.hasReceivedUpdates = true;
+            this.emit('deviceAdded', device);
+        }
+
+        if (brightnessChanged) {
+            stateChanged.push('brightness');
+        }
+        if (colorChanged) {
+            stateChanged.push('color');
+        }
+        if (onOffChanged) {
+            stateChanged.push('onOff');
+        }
+        device.emit('updatedStatus', device.state, stateChanged as stateChangedOptions);
+        // eventEmitter.emit("updatedStatus", device, device.state, stateChanged);
+    }
+
+    private onScanMessage(data: Record<string, any>): void {
+        const oldList = Array.from(deviceList.values());
+        if (!deviceList.has(data.ip)) {
+            if(!udpSocket) return;
+            var device = new Device(data, this, udpSocket);
+            device.updateValues();
+        }
+        this.discoverTimes.set(data.ip, 0);
+        oldList.forEach((device) => {
+            if (!deviceList.has(device.ip)) {
+                this.emit('deviceRemoved', device);
+                device.destroy();
+                deviceList.delete(device.ip);
+            }
+        });
+    }
 
     /**
      * A map of devices where the devices' IP is the key, and the Device object is the value.
@@ -379,12 +378,14 @@ class Govee extends EventEmitter
 
     public destroy ()
     {
-        eventEmitter.removeAllListeners();
+        this.removeAllListeners();
         deviceList = new Map<string, Device>();
-        eventEmitter = undefined;
-        udpSocket.close();
+        udpSocket?.close();
         udpSocket = undefined;
-        clearInterval(this.discoverInterval);
+        if(this.discoverInterval !== null) {
+            clearInterval(this.discoverInterval);
+            this.discoverInterval = null;
+        }
         //? Loop over all devices and clear their timeouts
         deviceList.forEach((device) =>
         {

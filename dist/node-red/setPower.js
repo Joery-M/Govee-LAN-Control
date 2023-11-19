@@ -20,7 +20,7 @@ module.exports = (RED) => {
         import_globalData.govee.devicesArray.forEach((arrayDevice) => {
           setDevicePower(arrayDevice);
         });
-      } else {
+      } else if (device) {
         setDevicePower(device);
       }
       function setDevicePower(device2) {

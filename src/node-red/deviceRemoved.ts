@@ -1,13 +1,15 @@
 import * as registry from "@node-red/registry";
 import { Node, NodeAPISettingsWithData, NodeDef } from "node-red";
-import Govee, { Device } from "../index";
+import { Device } from "../index";
 import { govee } from "./globalData";
 
 module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
 {
     function deviceRemovedNode (config: NodeDef)
     {
+        // @ts-ignore
         RED.nodes.createNode(this, config);
+        // @ts-ignore
         var node: Node = this;
 
         node.on("close", () =>

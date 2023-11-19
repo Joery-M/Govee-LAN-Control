@@ -1,5 +1,5 @@
 import * as registry from "@node-red/registry";
-import { Node, NodeAPISettingsWithData, NodeDef, NodeInitializer, NodeMessage } from "node-red";
+import { Node, NodeAPISettingsWithData, NodeDef } from "node-red";
 import { govee } from "./globalData";
 
 // Local scripts
@@ -38,7 +38,7 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
     RED.nodes.registerType("Device Added", discoverNode);
 
 
-    RED.httpAdmin.get("/govee/devices", (req, res) =>
+    RED.httpAdmin.get("/govee/devices", (_req, res) =>
     {
         console.log("Govee HTTP: Devices list requested");
         var deviceArray = govee.devicesArray.map((device) =>
@@ -58,7 +58,7 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
     {
         console.log("Govee HTTP: Device requested to identify");
 
-        var deviceId: string = new URL(req.url, `http://${req.headers.host}`).searchParams.get("device");
+        var deviceId: string | null = new URL(req.url, `http://${req.headers.host}`).searchParams.get("device");
         var device = govee.devicesArray.find((dev) => dev.deviceID == deviceId);
         if (!device && deviceId !== "all")
         {
@@ -73,7 +73,7 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
             {
                 blinkDevice(arrayDevice);
             });
-        } else
+        } else if(device)
         {
             blinkDevice(device);
         }
@@ -114,7 +114,7 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
 
 function sleep (time: number)
 {
-    return new Promise<void>((resolve, reject) =>
+    return new Promise<void>((resolve, _reject) =>
     {
         setTimeout(() =>
         {

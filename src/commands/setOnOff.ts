@@ -3,7 +3,7 @@ import { Device } from "..";
 export function setOff (this: Device): Promise<void>
 {
     var device = this;
-    return new Promise((resolve, reject) =>
+    return new Promise((resolve, _reject) =>
     {
         let message = JSON.stringify(
             {
@@ -31,7 +31,7 @@ export function setOff (this: Device): Promise<void>
 export function setOn (this: Device): Promise<void>
 {
     var device = this;
-    return new Promise((resolve, reject) =>
+    return new Promise((resolve, _reject) =>
     {
         let message = JSON.stringify(
             {

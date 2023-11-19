@@ -5,9 +5,8 @@ const port = 4002;
 
 
 //? Loop over all network interfaces (that apply) to find one with Govee devices.
-export default (): Promise<Socket> =>
-{
-    return new Promise((resolve, reject) =>
+export function getGoveeDeviceSocket (): Promise<Socket | undefined> {
+    return new Promise((resolve, _reject) =>
     {
         const nets = networkInterfaces();
         var sockets: Socket[] = []
@@ -27,7 +26,7 @@ export default (): Promise<Socket> =>
                     });
                     sockets.push(socket)
 
-                    socket.once('message', (msg, remote) =>
+                    socket.once('message', (_msg, _remote) =>
                     {
                         resolve(socket);
                         isResolved = true
@@ -58,7 +57,7 @@ export default (): Promise<Socket> =>
         }
 
         setTimeout(() => {
-            if (isResolved == false) {
+            if (!isResolved) {
                 sockets.forEach((socket)=>{
                     socket.close()
                 })

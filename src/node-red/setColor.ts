@@ -1,6 +1,6 @@
 import * as registry from "@node-red/registry";
 import { Node, NodeAPISettingsWithData, NodeDef } from "node-red";
-import Govee, { colorOptions, Device } from "../index";
+import { colorOptions, Device } from "../index";
 import { govee } from "./globalData";
 
 const deviceIDregex = /([A-f0-9]{2}:){7}[A-z0-9]{2}/i;
@@ -12,12 +12,14 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
 {
     function setColorNode (config: Record<string, any>)
     {
+        // @ts-ignore
         RED.nodes.createNode(this, config as NodeDef);
+        // @ts-ignore
         var node: Node = this;
 
         node.on("input", async (msg) =>
         {
-            var device: Device;
+            var device: Device | undefined;
             if (deviceIDregex.test(config.device))
             {
                 device = govee.devicesArray.find((dev) => dev.deviceID == config.device);
@@ -43,7 +45,7 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
                 {
                     setDeviceColor(arrayDevice, newColor);
                 });
-            } else
+            } else if (device)
             {
                 setDeviceColor(device, newColor);
             }
