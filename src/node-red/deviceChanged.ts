@@ -1,6 +1,6 @@
 import * as registry from "@node-red/registry";
 import { Node, NodeAPISettingsWithData, NodeDef } from "node-red";
-import Govee, { Device, DeviceState, stateChangedOptions } from "../index";
+import { Device, DeviceState, stateChangedOptions } from "../index";
 import { govee } from "./globalData";
 
 var deviceIDregex = /([A-f0-9]{2}:){7}[A-z0-9]{2}/i;
@@ -11,7 +11,9 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
 {
     function deviceChangedNode (config: Record<string, any>)
     {
+        // @ts-ignore
         RED.nodes.createNode(this, config as NodeDef);
+        // @ts-ignore
         var node: Node = this;
 
         node.on("close", () =>
@@ -21,18 +23,18 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
 
         govee.on("updatedStatus", handleDeviceChange);
 
-        function handleDeviceChange (device: Device, data: DeviceState, stateChanged: stateChangedOptions)
+        function handleDeviceChange (device: Device, _data: DeviceState, stateChanged: stateChangedOptions)
         {
             if (stateChanged.length == 0)
             {
                 return;
             }
             // Check with filter
-            var filter = config.trigger.split(",");
+            var filter: string[] = config.trigger.split(",");
             var hasFilterMatch = false;
-            filter.forEach(item =>
+            stateChanged.forEach(item =>
             {
-                if (stateChanged.includes(item))
+                if (item !== undefined && filter.includes(item))
                 {
                     hasFilterMatch = true;
                 }
@@ -43,7 +45,7 @@ module.exports = (RED: registry.NodeAPI<NodeAPISettingsWithData>): void =>
             }
             // console.log("Device got changed: " + device.model);
 
-            var configDevice: Device;
+            var configDevice: Device | undefined;
             if (deviceIDregex.test(config.device))
             {
                 configDevice = govee.devicesArray.find((dev) => dev.deviceID == config.device);

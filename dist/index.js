@@ -67,7 +67,7 @@ var interpolate = function(value, s1, s2, t1, t2, slope) {
 };
 function setColor(options) {
   var device = this;
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     var rgb2 = { r: 0, g: 0, b: 0 };
     var message;
     if (options.kelvin) {
@@ -130,7 +130,7 @@ function setColor(options) {
   });
 }
 function setBrightness(brightness) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     var bright = Math.round(parseFloat(brightness.toString()) * 100) / 100;
     let message = JSON.stringify(
       {
@@ -150,7 +150,7 @@ function setBrightness(brightness) {
     });
   });
 }
-function fade(eventEmitter2, options) {
+function fade(options) {
   return new Promise(async (resolve, reject) => {
     var device = this;
     await updateValues(device);
@@ -159,7 +159,7 @@ function fade(eventEmitter2, options) {
     var curKelvin = ct.rgb2colorTemperature({ red: device.state.color.r, green: device.state.color.g, blue: device.state.color.b });
     var curBrightness = device.state.isOn == 1 ? device.state.brightness : 1;
     var targetKelvin;
-    var targetBright = options.brightness;
+    const targetBright = options.brightness;
     if (options.color?.kelvin) {
       targetKelvin = parseFloat(options.color.kelvin.toString().replace(/[^0-9]/g, ""));
     }
@@ -172,18 +172,18 @@ function fade(eventEmitter2, options) {
       newColor = import_color_convert.rgb.hex(options.color.rgb);
     else if (options.color?.hex !== void 0)
       newColor = options.color.hex.replace(/#/g, "");
-    async function stepBrightness(percent2) {
-      var newBright = lerp(curBrightness, targetBright, Math.max(Math.min(percent2, 1), 0));
-      device.actions.setBrightness(newBright);
+    async function stepBrightness(percent2, targetBrightness) {
+      var newBright = lerp(curBrightness, targetBrightness, Math.max(Math.min(percent2, 1), 0));
+      return device.actions.setBrightness(newBright);
     }
     async function stepColor(percent2, newColor2) {
       var lerpedColor = lerpColor(curHex, newColor2, Math.max(Math.min(percent2, 1), 0));
-      device.actions.setColor({ hex: "#" + lerpedColor });
+      return device.actions.setColor({ hex: "#" + lerpedColor });
     }
     async function stepKelvin(percent2, targetKelvin2) {
       var lerpedKelvin = lerp(curKelvin, targetKelvin2, Math.max(Math.min(percent2, 1), 0));
       var kelvinRGB = ct.colorTemperature2rgb(lerpedKelvin);
-      device.actions.setColor({ rgb: [kelvinRGB.red, kelvinRGB.green, kelvinRGB.blue] });
+      return device.actions.setColor({ rgb: [kelvinRGB.red, kelvinRGB.green, kelvinRGB.blue] });
     }
     var running = true;
     var fadeEndTimeout = setTimeout(async () => {
@@ -197,7 +197,7 @@ function fade(eventEmitter2, options) {
         var kelvinRGB = ct.colorTemperature2rgb(targetKelvin);
         await device.actions.setColor({ rgb: [kelvinRGB.red, kelvinRGB.green, kelvinRGB.blue] });
       }
-      if (options.brightness !== void 0) {
+      if (targetBright !== void 0) {
         device.actions.setBrightness(targetBright);
       }
       await sleep(50);
@@ -222,31 +222,36 @@ function fade(eventEmitter2, options) {
       }
     }
     this.once("fadeCancel", fadeCancelHandler);
-    while (running == true) {
+    while (running) {
       var startLoopTime = Date.now();
       var percent = interpolate((Date.now() - startTime) / (options.time - 100), 0, 1, 0, 1, 0.5);
       if (changeColor) {
         stepColor(percent, newColor);
       }
       if (options.color && options.color.kelvin !== void 0) {
-        stepKelvin(percent, targetKelvin);
+        const targetKelvin2 = typeof options.color.kelvin === "string" ? parseFloat(options.color.kelvin) : options.color.kelvin;
+        if (!isNaN(targetKelvin2))
+          stepKelvin(percent, targetKelvin2);
       }
       if (options.brightness !== void 0) {
-        stepBrightness(percent);
+        stepBrightness(percent, options.brightness);
       }
       await sleep(30 - (Date.now() - startLoopTime));
     }
   });
 }
 function sleep(ms) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     setTimeout(() => {
       resolve();
     }, ms);
   });
 }
 function updateValues(device, updateAll) {
-  return new Promise((resolve, reject) => {
+  if (!device) {
+    return Promise.reject("No device given");
+  }
+  return new Promise((resolve, _reject) => {
     let message = JSON.stringify(
       {
         "msg": {
@@ -268,7 +273,7 @@ function updateValues(device, updateAll) {
 // src/commands/setOnOff.ts
 function setOff() {
   var device = this;
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     let message = JSON.stringify(
       {
         msg: {
@@ -288,7 +293,7 @@ function setOff() {
 }
 function setOn() {
   var device = this;
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     let message = JSON.stringify(
       {
         msg: {
@@ -312,8 +317,8 @@ var import_node_dgram = require("dgram");
 var import_os = require("os");
 var address = "239.255.255.250";
 var port = 4002;
-var createSocket_default = () => {
-  return new Promise((resolve, reject) => {
+function getGoveeDeviceSocket() {
+  return new Promise((resolve, _reject) => {
     const nets = (0, import_os.networkInterfaces)();
     var sockets = [];
     var isResolved = false;
@@ -326,7 +331,7 @@ var createSocket_default = () => {
             reuseAddr: true
           });
           sockets.push(socket);
-          socket.once("message", (msg, remote) => {
+          socket.once("message", (_msg, _remote) => {
             resolve(socket);
             isResolved = true;
           });
@@ -351,7 +356,7 @@ var createSocket_default = () => {
       });
     }
     setTimeout(() => {
-      if (isResolved == false) {
+      if (!isResolved) {
         sockets.forEach((socket) => {
           socket.close();
         });
@@ -359,7 +364,7 @@ var createSocket_default = () => {
       }
     }, 5e3);
   });
-};
+}
 
 // src/index.ts
 var import_events = require("events");
@@ -417,27 +422,25 @@ var actions = class {
   setBrightness = (brightness) => setBrightness.call(this.device, brightness);
   fadeColor = (options) => {
     this.cancelFade();
-    return fade.call(this.device, eventEmitter, options);
+    return fade.bind(this.device)(options);
   };
   cancelFade = (rejectPromises = false) => this.device.emit("fadeCancel", rejectPromises);
   setOff = () => setOff.call(this.device);
   setOn = () => setOn.call(this.device);
 };
 var deviceList = /* @__PURE__ */ new Map();
-var eventEmitter;
 var udpSocket;
 var Govee = class extends import_events.EventEmitter {
   config;
   isReady = false;
   constructor(config) {
     super();
-    eventEmitter = this;
     this.config = config;
     this.getSocket().then(() => {
       this.emit("ready");
       this.isReady = true;
     });
-    var discoverInterval = 6e4;
+    let discoverInterval = 6e4;
     if (config && config.discoverInterval) {
       discoverInterval = config.discoverInterval;
     }
@@ -447,15 +450,15 @@ var Govee = class extends import_events.EventEmitter {
       }, discoverInterval);
     });
   }
-  discoverInterval;
-  getSocket = () => {
-    return new Promise((resolve, reject) => {
-      createSocket_default().then(async (socket) => {
+  discoverInterval = null;
+  getSocket() {
+    return new Promise((resolve, _reject) => {
+      getGoveeDeviceSocket().then(async (socket) => {
         if (!socket) {
           console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
-          var whileSocket = void 0;
+          let whileSocket = void 0;
           while (whileSocket == void 0) {
-            whileSocket = await createSocket_default();
+            whileSocket = await this.getSocket();
             if (whileSocket == void 0) {
               console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
             }
@@ -464,7 +467,7 @@ var Govee = class extends import_events.EventEmitter {
         } else {
           udpSocket = socket;
         }
-        udpSocket.on("message", this.receiveMessage);
+        udpSocket.on("message", this.receiveMessage.bind(this));
         if (!this.config || this.config.startDiscover) {
           this.discover();
         }
@@ -475,8 +478,8 @@ var Govee = class extends import_events.EventEmitter {
         resolve();
       });
     });
-  };
-  discover = () => {
+  }
+  discover() {
     if (!udpSocket) {
       console.error("UDP Socket was not estabilished whilst trying to discover new devices.\n\nIs the server able to access UDP port 4001 and 4002 on address 239.255.255.250?");
       return;
@@ -493,73 +496,86 @@ var Govee = class extends import_events.EventEmitter {
     );
     udpSocket.send(message, 0, message.length, 4001, "239.255.255.250");
     deviceList.forEach((dev) => {
+      if (!udpSocket)
+        return;
       udpSocket.send(message, 0, message.length, 4003, dev.ip);
-      this.discoverTimes[dev.ip] ||= 0;
-      this.discoverTimes[dev.ip]++;
-      if (this.discoverTimes[dev.ip] >= 5) {
-        eventEmitter.emit("deviceRemoved", dev);
+      const oldCount = this.discoverTimes.get(dev.ip) ?? 0;
+      this.discoverTimes.set(dev.ip, oldCount + 1);
+      if (oldCount >= 4) {
+        this.emit("deviceRemoved", dev);
         dev.destroy();
         deviceList.delete(dev.ip);
       }
     });
-  };
+  }
   discoverTimes = /* @__PURE__ */ new Map();
-  receiveMessage = async (msg, rinfo) => {
-    var msgRes = JSON.parse(msg.toString());
+  async receiveMessage(msg, rinfo) {
+    const msgRes = JSON.parse(msg.toString());
     if (!udpSocket) {
       return;
     }
-    var data = msgRes.msg.data;
+    const data = msgRes.msg.data;
     switch (msgRes.msg.cmd) {
       case "scan":
-        var oldList = Array.from(deviceList.values());
-        if (!deviceList.has(data.ip)) {
-          var device = new Device(data, this, udpSocket);
-          device.updateValues();
-        }
-        this.discoverTimes[data.ip] = 0;
-        oldList.forEach((device2) => {
-          if (!deviceList.has(device2.ip)) {
-            eventEmitter.emit("deviceRemoved", device2);
-            device2.destroy();
-            deviceList.delete(device2.ip);
-          }
-        });
+        this.onScanMessage(data);
         break;
       case "devStatus":
-        var device = deviceList.get(rinfo.address);
-        var oldState = JSON.parse(JSON.stringify(device.state));
-        device.state.brightness = data.brightness;
-        device.state.isOn = data.onOff;
-        device.state.color = data.color;
-        if (!data.color.colorTemInKelvin) {
-          device.state.colorKelvin = ct2.rgb2colorTemperature({ red: data.color.r, green: data.color.g, blue: data.color.b });
-        } else {
-          device.state.colorKelvin = data.color.colorTemInKelvin;
-        }
-        var stateChanged = [];
-        var colorChanged = oldState.color.r !== data.color.r || oldState.color.g !== data.color.g || oldState.color.b !== data.color.b;
-        var brightnessChanged = oldState.brightness !== data.brightness;
-        var onOffChanged = oldState.isOn !== data.onOff;
-        if (!device.state.hasReceivedUpdates) {
-          device.state.hasReceivedUpdates = true;
-          eventEmitter.emit("deviceAdded", device);
-        }
-        if (brightnessChanged) {
-          stateChanged.push("brightness");
-        }
-        if (colorChanged) {
-          stateChanged.push("color");
-        }
-        if (onOffChanged) {
-          stateChanged.push("onOff");
-        }
-        device.emit("updatedStatus", device.state, stateChanged);
+        this.onDevStatusMessage(rinfo, data);
         break;
       default:
         break;
     }
-  };
+  }
+  onDevStatusMessage(rinfo, data) {
+    const device = deviceList.get(rinfo.address);
+    if (!device) {
+      return;
+    }
+    const oldState = JSON.parse(JSON.stringify(device.state));
+    device.state.brightness = data.brightness;
+    device.state.isOn = data.onOff;
+    device.state.color = data.color;
+    if (!data.color.colorTemInKelvin) {
+      device.state.colorKelvin = ct2.rgb2colorTemperature({ red: data.color.r, green: data.color.g, blue: data.color.b });
+    } else {
+      device.state.colorKelvin = data.color.colorTemInKelvin;
+    }
+    const stateChanged = [];
+    const colorChanged = oldState.color.r !== data.color.r || oldState.color.g !== data.color.g || oldState.color.b !== data.color.b;
+    const brightnessChanged = oldState.brightness !== data.brightness;
+    const onOffChanged = oldState.isOn !== data.onOff;
+    if (!device.state.hasReceivedUpdates) {
+      device.state.hasReceivedUpdates = true;
+      this.emit("deviceAdded", device);
+    }
+    if (brightnessChanged) {
+      stateChanged.push("brightness");
+    }
+    if (colorChanged) {
+      stateChanged.push("color");
+    }
+    if (onOffChanged) {
+      stateChanged.push("onOff");
+    }
+    device.emit("updatedStatus", device.state, stateChanged);
+  }
+  onScanMessage(data) {
+    const oldList = Array.from(deviceList.values());
+    if (!deviceList.has(data.ip)) {
+      if (!udpSocket)
+        return;
+      var device = new Device(data, this, udpSocket);
+      device.updateValues();
+    }
+    this.discoverTimes.set(data.ip, 0);
+    oldList.forEach((device2) => {
+      if (!deviceList.has(device2.ip)) {
+        this.emit("deviceRemoved", device2);
+        device2.destroy();
+        deviceList.delete(device2.ip);
+      }
+    });
+  }
   get devicesMap() {
     return deviceList;
   }
@@ -572,12 +588,14 @@ var Govee = class extends import_events.EventEmitter {
     return;
   }
   destroy() {
-    eventEmitter.removeAllListeners();
+    this.removeAllListeners();
     deviceList = /* @__PURE__ */ new Map();
-    eventEmitter = void 0;
-    udpSocket.close();
+    udpSocket?.close();
     udpSocket = void 0;
-    clearInterval(this.discoverInterval);
+    if (this.discoverInterval !== null) {
+      clearInterval(this.discoverInterval);
+      this.discoverInterval = null;
+    }
     deviceList.forEach((device) => {
       device.destroy();
     });

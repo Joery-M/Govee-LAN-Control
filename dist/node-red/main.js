@@ -23,7 +23,7 @@ module.exports = (RED) => {
     }
   }
   RED.nodes.registerType("Device Added", discoverNode);
-  RED.httpAdmin.get("/govee/devices", (req, res) => {
+  RED.httpAdmin.get("/govee/devices", (_req, res) => {
     console.log("Govee HTTP: Devices list requested");
     var deviceArray = import_globalData.govee.devicesArray.map((device) => {
       var entry = {};
@@ -49,7 +49,7 @@ module.exports = (RED) => {
       import_globalData.govee.devicesArray.forEach((arrayDevice) => {
         blinkDevice(arrayDevice);
       });
-    } else {
+    } else if (device) {
       blinkDevice(device);
     }
   });
@@ -80,7 +80,7 @@ module.exports = (RED) => {
   }
 };
 function sleep(time) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     setTimeout(() => {
       resolve();
     }, time);

@@ -170,9 +170,11 @@ declare class Govee extends EventEmitter {
      *
      * Note that you typically don't have to run this command yourself.
      */
-    discover: () => void;
+    discover(): void;
     private discoverTimes;
     private receiveMessage;
+    private onDevStatusMessage;
+    private onScanMessage;
     /**
      * A map of devices where the devices' IP is the key, and the Device object is the value.
      */

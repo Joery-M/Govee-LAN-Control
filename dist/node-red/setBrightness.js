@@ -28,7 +28,7 @@ module.exports = (RED) => {
         import_globalData.govee.devicesArray.forEach((arrayDevice) => {
           setDeviceBrightness(arrayDevice, bright);
         });
-      } else {
+      } else if (device) {
         setDeviceBrightness(device, bright);
       }
       function setDeviceBrightness(device2, bright2) {

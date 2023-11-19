@@ -1,6 +1,5 @@
 import { defineConfig, build } from 'tsup';
 import * as fs from "fs";
-import path from 'path';
 import * as cp from 'child_process';
 
 export default defineConfig({
@@ -14,7 +13,7 @@ export default defineConfig({
     {
         //? Build all the ts files and pop em in the dist/node-red folder
         //* Bundling is disabled to be able to use html and other stuff
-        var fileArray = []
+        var fileArray: string[] = []
         var files = fs.readdirSync("./src/node-red/").filter((val)=> val.endsWith(".ts"))
         files.forEach((file)=>{
             fileArray.push("./src/node-red/" + file)
@@ -42,7 +41,7 @@ export default defineConfig({
         //* Copy the icons folder
         //? Could not use fs, bc of "operation not permitted"
 
-        
+
         // copyFolderRecursiveSync("./src/node-red/html/assets", "./dist/node-red/")
         if (!fs.existsSync("./dist/node-red/icons")) {
             fs.mkdirSync("./dist/node-red/icons")

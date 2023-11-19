@@ -10,14 +10,14 @@ module.exports = (RED) => {
       import_globalData.govee.removeListener("updatedStatus", handleDeviceChange);
     });
     import_globalData.govee.on("updatedStatus", handleDeviceChange);
-    function handleDeviceChange(device, data, stateChanged) {
+    function handleDeviceChange(device, _data, stateChanged) {
       if (stateChanged.length == 0) {
         return;
       }
       var filter = config.trigger.split(",");
       var hasFilterMatch = false;
-      filter.forEach((item) => {
-        if (stateChanged.includes(item)) {
+      stateChanged.forEach((item) => {
+        if (item !== void 0 && filter.includes(item)) {
           hasFilterMatch = true;
         }
       });

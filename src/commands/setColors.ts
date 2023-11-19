@@ -1,16 +1,16 @@
-import Govee, { colorOptions, DataResponseStatus, Device, fadeOptions, stateChangedOptions } from "..";
+import { colorOptions, Device, fadeOptions, stateChangedOptions } from "..";
 import { hex, hsl, rgb } from "color-convert";
 import * as ct from 'color-temperature';
 
 /**
- * 
+ *
  * @param x Starting number
  * @param y Ending number
  * @param a percent (0-1)
  */
 const lerp = (x: number, y: number, a: number) => x * (1 - a) + y * a;
 /**
- * 
+ *
  * @param a Starting number
  * @param b Ending number
  * @param amount percent (0-1)
@@ -82,7 +82,7 @@ var interpolate = function (value: number, s1: number, s2: number, t1: any, t2: 
 export function setColor (this: Device, options: colorOptions): Promise<void>
 {
     var device = this;
-    return new Promise((resolve, reject) =>
+    return new Promise((resolve, _reject) =>
     {
         var rgb = { r: 0, g: 0, b: 0 };
         var message: string;
@@ -166,7 +166,7 @@ export function setColor (this: Device, options: colorOptions): Promise<void>
 
 export function setBrightness (this: Device, brightness: number | string): Promise<void>
 {
-    return new Promise((resolve, reject) =>
+    return new Promise((resolve, _reject) =>
     {
         var bright = Math.round(parseFloat(brightness.toString()) * 100) / 100;
         let message = JSON.stringify(
@@ -193,7 +193,7 @@ export function setBrightness (this: Device, brightness: number | string): Promi
     });
 }
 
-export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): Promise<void>
+export function fade (this: Device, options: fadeOptions): Promise<void>
 {
     return new Promise(async (resolve, reject) =>
     {
@@ -206,7 +206,7 @@ export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): 
         var curKelvin = ct.rgb2colorTemperature({ red: device.state.color.r, green: device.state.color.g, blue: device.state.color.b });
         var curBrightness = device.state.isOn == 1 ? device.state.brightness : 1;
         var targetKelvin: number;
-        var targetBright = options.brightness;
+        const targetBright = options.brightness;
 
         if (options.color?.kelvin)
         {
@@ -225,17 +225,17 @@ export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): 
         else if (options.color?.hex !== undefined)
             newColor = options.color.hex.replace(/#/g, '');
 
-        async function stepBrightness (percent: number)
+        async function stepBrightness (percent: number, targetBrightness: number)
         {
-            var newBright = lerp(curBrightness, targetBright, Math.max(Math.min(percent, 1), 0));
-            device.actions.setBrightness(newBright);
+            var newBright = lerp(curBrightness, targetBrightness, Math.max(Math.min(percent, 1), 0));
+            return device.actions.setBrightness(newBright);
         }
 
         async function stepColor (percent: number, newColor: string)
         {
             var lerpedColor = lerpColor(curHex, newColor, Math.max(Math.min(percent, 1), 0));
 
-            device.actions.setColor({ hex: "#" + lerpedColor });
+            return device.actions.setColor({ hex: "#" + lerpedColor });
         }
 
         async function stepKelvin (percent: number, targetKelvin: number)
@@ -243,12 +243,12 @@ export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): 
             var lerpedKelvin = lerp(curKelvin, targetKelvin, Math.max(Math.min(percent, 1), 0));
             var kelvinRGB = ct.colorTemperature2rgb(lerpedKelvin);
 
-            device.actions.setColor({ rgb: [kelvinRGB.red, kelvinRGB.green, kelvinRGB.blue] });
+            return device.actions.setColor({ rgb: [kelvinRGB.red, kelvinRGB.green, kelvinRGB.blue] });
         }
 
         // Start loop
         var running = true;
-        
+
         var fadeEndTimeout = setTimeout(async () =>
         {
             running = false;
@@ -263,7 +263,7 @@ export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): 
                 var kelvinRGB = ct.colorTemperature2rgb(targetKelvin);
                 await device.actions.setColor({ rgb: [kelvinRGB.red, kelvinRGB.green, kelvinRGB.blue] });
             }
-            if (options.brightness !== undefined)
+            if (targetBright !== undefined)
             {
                 device.actions.setBrightness(targetBright);
             }
@@ -282,19 +282,19 @@ export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): 
         }, options.time - 100);
 
         // Respond to fade cancel
-        function fadeCancelHandler(rejectPromise) {
+        function fadeCancelHandler(rejectPromise: boolean) {
             running = false
             clearTimeout(fadeEndTimeout);
 
             if (rejectPromise) {
                 reject("Fade got cancelled")
-            }else{
+            } else {
                 resolve();
             }
         }
         this.once("fadeCancel", fadeCancelHandler)
 
-        while (running == true)
+        while (running)
         {
             var startLoopTime = Date.now();
             var percent = interpolate((Date.now() - startTime) / (options.time - 100), 0, 1, 0, 1, 0.5);
@@ -307,13 +307,15 @@ export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): 
             // Kelvin step
             if (options.color && options.color.kelvin !== undefined)
             {
-                stepKelvin(percent, targetKelvin);
+                const targetKelvin =
+                  typeof options.color.kelvin === "string" ? parseFloat(options.color.kelvin) : options.color.kelvin;
+                if(!isNaN(targetKelvin)) stepKelvin(percent, targetKelvin);
             }
 
             // Brightness step
             if (options.brightness !== undefined)
             {
-                stepBrightness(percent);
+                stepBrightness(percent, options.brightness);
             }
             await sleep(30 - (Date.now() - startLoopTime));
         }
@@ -322,7 +324,7 @@ export function fade (this: Device, eventEmitter: Govee, options: fadeOptions): 
 
 function sleep (ms: number): Promise<void>
 {
-    return new Promise((resolve, reject) =>
+    return new Promise((resolve, _reject) =>
     {
         setTimeout(() =>
         {
@@ -333,7 +335,10 @@ function sleep (ms: number): Promise<void>
 
 export function updateValues (device?: Device, updateAll?: boolean)
 {
-    return new Promise<void>((resolve, reject) =>
+    if(!device) {
+        return Promise.reject("No device given");
+    }
+    return new Promise<void>((resolve, _reject) =>
     {
         let message = JSON.stringify(
             {
